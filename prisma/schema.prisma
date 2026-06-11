@@ -1,0 +1,169 @@
+// Bolão da Copa do Mundo FIFA 2026 — modelo de dados
+// Postgres (Neon) + Prisma ORM
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum Stage {
+  GROUP // Fase de grupos
+  ROUND_32 // 16 avos de final (fase de 32)
+  ROUND_16 // Oitavas de final
+  QUARTER // Quartas de final
+  SEMI // Semifinais
+  THIRD_PLACE // Disputa de 3º lugar
+  FINAL // Final
+}
+
+enum MatchStatus {
+  SCHEDULED
+  IN_PLAY
+  PAUSED
+  FINISHED
+  SUSPENDED
+  POSTPONED
+  CANCELLED
+  AWARDED // W.O. — tratado como finalizado
+}
+
+model User {
+  id           String       @id @default(cuid())
+  name         String
+  email        String       @unique
+  passwordHash String
+  role         Role         @default(USER)
+  createdAt    DateTime     @default(now())
+  predictions  Prediction[]
+  championPick ChampionPick?
+}
+
+model Team {
+  id         String  @id @default(cuid())
+  externalId Int     @unique
+  name       String
+  code       String // sigla (TLA), ex.: BRA
+  flagUrl    String
+  group      String? // "A".."L"
+
+  homeMatches      Match[]        @relation("HomeTeam")
+  awayMatches      Match[]        @relation("AwayTeam")
+  penaltyWins      Match[]        @relation("PenaltyWinner")
+  advancedMatches  Match[]        @relation("AdvancingTeam")
+  predictions      Prediction[]   @relation("PredictedAdvancing")
+  championPicks    ChampionPick[]
+  standings        GroupStanding[]
+}
+
+model Match {
+  id         String      @id @default(cuid())
+  externalId Int         @unique
+  stage      Stage
+  group      String? // "A".."L" (apenas fase de grupos)
+  matchday   Int?
+  kickoff    DateTime // sempre UTC
+  status     MatchStatus @default(SCHEDULED)
+
+  homeTeamId      String?
+  awayTeamId      String?
+  homePlaceholder String? // ex.: "1º do Grupo A" enquanto o time não é definido
+  awayPlaceholder String?
+
+  // Placar do tempo regulamentar (90 min) — base da pontuação
+  homeScore Int?
+  awayScore Int?
+  // Placar acumulado após a prorrogação (120 min), quando houver
+  homeScoreET Int?
+  awayScoreET Int?
+  // Pênaltis, quando houver
+  homePenalties Int?
+  awayPenalties Int?
+
+  penaltyWinnerTeamId String?
+  advancingTeamId     String? // quem avançou (mata-mata), seja qual for a forma de decisão
+
+  venue     String?
+  city      String?
+  updatedAt DateTime @updatedAt
+
+  homeTeam      Team? @relation("HomeTeam", fields: [homeTeamId], references: [id])
+  awayTeam      Team? @relation("AwayTeam", fields: [awayTeamId], references: [id])
+  penaltyWinner Team? @relation("PenaltyWinner", fields: [penaltyWinnerTeamId], references: [id])
+  advancingTeam Team? @relation("AdvancingTeam", fields: [advancingTeamId], references: [id])
+
+  predictions Prediction[]
+
+  @@index([kickoff])
+  @@index([status])
+  @@index([stage, group])
+}
+
+model Prediction {
+  id        String   @id @default(cuid())
+  userId    String
+  matchId   String
+  homeScore Int
+  awayScore Int
+  // Obrigatório no mata-mata quando o palpite é empate; caso contrário, inferido do placar
+  advancingTeamId String?
+  points          Int? // null = ainda não pontuado
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  user          User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  match         Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+  advancingTeam Team? @relation("PredictedAdvancing", fields: [advancingTeamId], references: [id])
+
+  @@unique([userId, matchId])
+  @@index([matchId])
+}
+
+model ChampionPick {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  teamId    String
+  points    Int? // creditado ao final do torneio
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  team Team @relation(fields: [teamId], references: [id])
+}
+
+model GroupStanding {
+  id             String   @id @default(cuid())
+  group          String // "A".."L"
+  teamId         String
+  position       Int
+  played         Int
+  won            Int
+  drawn          Int
+  lost           Int
+  goalsFor       Int
+  goalsAgainst   Int
+  goalDifference Int
+  points         Int
+  updatedAt      DateTime @updatedAt
+
+  team Team @relation(fields: [teamId], references: [id], onDelete: Cascade)
+
+  @@unique([group, teamId])
+}
+
+model SyncLog {
+  id         String   @id @default(cuid())
+  ranAt      DateTime @default(now())
+  ok         Boolean
+  scope      String // "window" | "full" | "manual" | "rescore"
+  message    String
+  durationMs Int?
+}
