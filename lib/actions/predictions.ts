@@ -23,11 +23,13 @@ const predictionSchema = z.object({
 
 export type SavePredictionInput = z.input<typeof predictionSchema>;
 
-function revalidateMatchPages(matchId: string) {
+function revalidateMatchPages(matchId: string, userId: string) {
   revalidatePath("/");
   revalidatePath("/palpites");
+  revalidatePath("/jogos");
   revalidatePath(`/jogos/${matchId}`);
   revalidatePath("/perfil");
+  revalidatePath(`/usuarios/${userId}`);
 }
 
 export async function savePrediction(
@@ -90,7 +92,7 @@ export async function savePrediction(
     update: { homeScore, awayScore, advancingTeamId },
   });
 
-  revalidateMatchPages(matchId);
+  revalidateMatchPages(matchId, session.user.id);
   return { ok: true };
 }
 
