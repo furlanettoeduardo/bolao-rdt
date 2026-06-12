@@ -24,6 +24,10 @@ jobs:
     steps:
       - name: Chamar endpoint de sincronização
         run: |
+          if [ -z "$APP_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "::notice::Secrets APP_URL e/ou CRON_SECRET não configurados — sincronização ignorada. Configure-os em Settings → Secrets and variables → Actions."
+            exit 0
+          fi
           curl --fail-with-body -sS -X POST "$APP_URL/api/cron/sync?scope=window" \
             -H "Authorization: Bearer $CRON_SECRET" \
             --max-time 60
