@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { LiveRefresh } from "@/components/live-refresh";
 import { PredictionCard } from "@/components/prediction/prediction-card";
+import { PredictionsBoard } from "@/components/prediction/predictions-board";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/cn";
 import { dayKey, formatDayHeading } from "@/lib/format";
@@ -17,6 +18,7 @@ import type { MatchDTO } from "@/lib/types";
 export const metadata = { title: "Palpites" };
 
 const FILTERS = [
+  { key: "pendentes", label: "Pendentes" },
   { key: "abertos", label: "Abertos" },
   { key: "todos", label: "Todos" },
   { key: "encerrados", label: "Encerrados" },
@@ -25,10 +27,17 @@ const FILTERS = [
 type FilterKey = (typeof FILTERS)[number]["key"];
 
 function parseFilter(raw: string | string[] | undefined): FilterKey {
-  return raw === "todos" || raw === "encerrados" ? raw : "abertos";
+  return raw === "todos" || raw === "encerrados" || raw === "pendentes"
+    ? raw
+    : "abertos";
 }
 
 const EMPTY_MESSAGES: Record<FilterKey, { title: string; description: string }> = {
+  pendentes: {
+    title: "Nenhum palpite pendente",
+    description:
+      "Você já palpitou em todos os jogos abertos com confronto definido. Tudo em dia!",
+  },
   abertos: {
     title: "Nenhum jogo aberto para palpite",
     description:
@@ -45,6 +54,24 @@ const EMPTY_MESSAGES: Record<FilterKey, { title: string; description: string }> 
       "Assim que os primeiros jogos terminarem, eles aparecem aqui com a sua pontuação.",
   },
 };
+
+/**
+ * Pendente = aberto (não travado), sem palpite do usuário E com os DOIS times
+ * definidos. Jogos com placeholder ("1º do Grupo A") não contam — você ainda
+ * não tem como palpitar de verdade.
+ */
+function isPending(
+  match: MatchDTO,
+  predictions: Map<string, unknown>,
+  now: Date
+): boolean {
+  return (
+    !isMatchLocked(match, now) &&
+    !predictions.has(match.id) &&
+    match.homeTeam != null &&
+    match.awayTeam != null
+  );
+}
 
 export default async function PalpitesPage({
   searchParams,
@@ -65,11 +92,12 @@ export default async function PalpitesPage({
   // Um único "agora" para toda a renderização — trava consistente entre cards
   const now = new Date();
 
-  const pendingCount = matches.filter(
-    (m) => !isMatchLocked(m, now) && !predictions.has(m.id)
+  const pendingCount = matches.filter((m) =>
+    isPending(m, predictions, now)
   ).length;
 
   const counts: Record<FilterKey, number> = {
+    pendentes: pendingCount,
     abertos: matches.filter((m) => !isFinishedStatus(m.status)).length,
     todos: matches.length,
     encerrados: matches.filter((m) => isFinishedStatus(m.status)).length,
@@ -78,6 +106,7 @@ export default async function PalpitesPage({
   const filtered = matches.filter((m) => {
     if (exibir === "encerrados") return isFinishedStatus(m.status);
     if (exibir === "abertos") return !isFinishedStatus(m.status);
+    if (exibir === "pendentes") return isPending(m, predictions, now);
     return true;
   });
 
@@ -107,16 +136,26 @@ export default async function PalpitesPage({
       </header>
 
       {pendingCount > 0 ? (
-        <p
+        <div
           role="status"
-          className="rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800"
         >
-          <span aria-hidden>⏳</span>{" "}
-          {pendingCount === 1
-            ? "1 palpite pendente"
-            : `${pendingCount} palpites pendentes`}{" "}
-          — preencha antes do início dos jogos!
-        </p>
+          <span>
+            <span aria-hidden>⏳</span>{" "}
+            {pendingCount === 1
+              ? "1 palpite pendente"
+              : `${pendingCount} palpites pendentes`}{" "}
+            — preencha antes do início dos jogos!
+          </span>
+          {exibir !== "pendentes" ? (
+            <Link
+              href="/palpites?exibir=pendentes"
+              className="shrink-0 rounded-lg border border-amber-400 bg-white px-3 py-1.5 text-xs font-bold text-amber-800 transition-colors hover:bg-amber-100"
+            >
+              Ver pendentes →
+            </Link>
+          ) : null}
+        </div>
       ) : (
         <p
           role="status"
@@ -161,6 +200,7 @@ export default async function PalpitesPage({
           description={EMPTY_MESSAGES[exibir].description}
         />
       ) : (
+        <PredictionsBoard>
         <div className="flex flex-col gap-6">
           {[...byDay.entries()].map(([key, dayMatches]) => {
             const first = dayMatches[0];
@@ -188,6 +228,7 @@ export default async function PalpitesPage({
             );
           })}
         </div>
+        </PredictionsBoard>
       )}
 
       <LiveRefresh />

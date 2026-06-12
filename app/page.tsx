@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { Countdown } from "@/components/countdown";
 import { LiveRefresh } from "@/components/live-refresh";
 import { LocalTime } from "@/components/local-time";
 import { MatchCard } from "@/components/match-card";
@@ -17,6 +18,7 @@ import { cn } from "@/lib/cn";
 import { SCORING } from "@/lib/config";
 import {
   getChampionPick,
+  getNextBrazilMatch,
   getPendingMatches,
   getRankingTop,
   getTodayAndLiveMatches,
@@ -34,14 +36,21 @@ export default async function DashboardPage() {
   const userId = session.user.id;
   const firstName = session.user.name?.trim().split(/\s+/)[0] ?? "torcedor";
 
-  const [todayMatches, predictions, pendingMatches, championPick, topFive] =
-    await Promise.all([
-      getTodayAndLiveMatches(),
-      getUserPredictionsMap(userId),
-      getPendingMatches(userId, 6),
-      getChampionPick(userId),
-      getRankingTop(5),
-    ]);
+  const [
+    todayMatches,
+    predictions,
+    pendingMatches,
+    championPick,
+    topFive,
+    nextBrazil,
+  ] = await Promise.all([
+    getTodayAndLiveMatches(),
+    getUserPredictionsMap(userId),
+    getPendingMatches(userId, 6),
+    getChampionPick(userId),
+    getRankingTop(5),
+    getNextBrazilMatch(),
+  ]);
 
   return (
     <div className="space-y-8">
@@ -62,6 +71,48 @@ export default async function DashboardPage() {
           </p>
         </div>
       </section>
+
+      {/* Próximo jogo do Brasil — contagem regressiva */}
+      {nextBrazil ? (
+        <section aria-labelledby="brasil-heading">
+          <Link
+            href={`/jogos/${nextBrazil.match.id}`}
+            className="block overflow-hidden rounded-xl border border-amber-400 bg-gradient-to-br from-amber-400 via-yellow-400 to-field-600 p-0.5 shadow-sm transition-transform hover:scale-[1.005]"
+          >
+            <div className="flex flex-col gap-3 rounded-[10px] bg-field-800 px-4 py-3 text-white sm:flex-row sm:items-center sm:justify-between">
+              <div className="min-w-0">
+                <p
+                  id="brasil-heading"
+                  className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-amber-300"
+                >
+                  <span aria-hidden>🇧🇷</span>
+                  {nextBrazil.live
+                    ? "Brasil em campo agora"
+                    : "Próximo jogo do Brasil"}
+                </p>
+                <div className="mt-1.5 flex items-center gap-2 text-base font-bold">
+                  <BrazilSide
+                    team={nextBrazil.match.homeTeam}
+                    placeholder={nextBrazil.match.homePlaceholder}
+                  />
+                  <span className="text-white/60">×</span>
+                  <BrazilSide
+                    team={nextBrazil.match.awayTeam}
+                    placeholder={nextBrazil.match.awayPlaceholder}
+                    reverse
+                  />
+                </div>
+                <p className="mt-1 text-xs text-white/70">
+                  <LocalTime iso={nextBrazil.match.kickoff} mode="datetime" />
+                </p>
+              </div>
+              <div className="shrink-0 sm:text-right">
+                <Countdown targetIso={nextBrazil.match.kickoff} />
+              </div>
+            </div>
+          </Link>
+        </section>
+      ) : null}
 
       {/* Saudação */}
       <header>
@@ -125,7 +176,7 @@ export default async function DashboardPage() {
                     {pendingMatches.map((match) => (
                       <li key={match.id}>
                         <Link
-                          href="/palpites"
+                          href="/palpites?exibir=pendentes"
                           className="block rounded-lg border border-amber-300 bg-amber-50/40 px-3 py-2 transition-colors hover:border-amber-400 hover:bg-amber-50"
                         >
                           <div className="flex items-center justify-between gap-2 text-xs text-slate-500">
@@ -153,7 +204,7 @@ export default async function DashboardPage() {
                     ))}
                   </ul>
                   <Link
-                    href="/palpites"
+                    href="/palpites?exibir=pendentes"
                     className={buttonClasses("primary", "md", "w-full")}
                   >
                     Fazer palpites
@@ -164,59 +215,6 @@ export default async function DashboardPage() {
                   <span aria-hidden>✓</span>
                   Você está em dia com seus palpites
                 </p>
-              )}
-            </CardBody>
-          </Card>
-        </section>
-
-        {/* Palpite de campeão */}
-        <section aria-labelledby="campeao-heading">
-          <Card>
-            <CardHeader
-              title={<span id="campeao-heading">Palpite de campeão</span>}
-              subtitle={`Vale +${SCORING.CHAMPION_BONUS} pts ao final do torneio`}
-            />
-            <CardBody>
-              {championPick ? (
-                <Link
-                  href="/chaveamento"
-                  className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition-colors hover:border-field-400 hover:bg-field-50/40"
-                >
-                  <TeamFlag
-                    flagUrl={championPick.team.flagUrl}
-                    name={championPick.team.name}
-                    code={championPick.team.code}
-                    size="lg"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate text-sm font-semibold text-slate-900">
-                      {championPick.team.name}
-                    </span>
-                    <span className="block text-xs text-slate-500">
-                      Seu campeão da Copa 2026
-                    </span>
-                  </span>
-                  {championPick.points != null ? (
-                    <Badge variant="gold">+{championPick.points} pts</Badge>
-                  ) : (
-                    <span className="text-xs font-semibold text-field-700">
-                      Ver chaveamento
-                    </span>
-                  )}
-                </Link>
-              ) : (
-                <div className="flex flex-col items-start gap-3 py-1">
-                  <p className="text-sm text-slate-600">
-                    Você ainda não escolheu seu campeão. Garanta o bônus antes
-                    do início do mata-mata!
-                  </p>
-                  <Link
-                    href="/chaveamento"
-                    className={buttonClasses("primary", "md")}
-                  >
-                    Escolha seu campeão (+{SCORING.CHAMPION_BONUS} pts)
-                  </Link>
-                </div>
               )}
             </CardBody>
           </Card>
@@ -288,6 +286,94 @@ export default async function DashboardPage() {
           </Card>
         </section>
       </div>
+
+      {/* Palpite de campeão — largura total */}
+      <section aria-labelledby="campeao-heading">
+        <Card>
+          <CardHeader
+            title={<span id="campeao-heading">Palpite de campeão</span>}
+            subtitle={`Vale +${SCORING.CHAMPION_BONUS} pts ao final do torneio`}
+          />
+          <CardBody>
+            {championPick ? (
+              <Link
+                href="/chaveamento"
+                className="flex items-center gap-3 rounded-lg border border-slate-200 p-3 transition-colors hover:border-field-400 hover:bg-field-50/40"
+              >
+                <TeamFlag
+                  flagUrl={championPick.team.flagUrl}
+                  name={championPick.team.name}
+                  code={championPick.team.code}
+                  size="lg"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-semibold text-slate-900">
+                    {championPick.team.name}
+                  </span>
+                  <span className="block text-xs text-slate-500">
+                    Seu campeão da Copa 2026
+                  </span>
+                </span>
+                {championPick.points != null ? (
+                  <Badge variant="gold">+{championPick.points} pts</Badge>
+                ) : (
+                  <span className="text-xs font-semibold text-field-700">
+                    Ver chaveamento
+                  </span>
+                )}
+              </Link>
+            ) : (
+              <div className="flex flex-col items-start gap-3 py-1 sm:flex-row sm:items-center sm:justify-between">
+                <p className="text-sm text-slate-600">
+                  Você ainda não escolheu seu campeão. Garanta o bônus antes do
+                  início do mata-mata!
+                </p>
+                <Link
+                  href="/chaveamento"
+                  className={buttonClasses("primary", "md", "shrink-0")}
+                >
+                  Escolha seu campeão (+{SCORING.CHAMPION_BONUS} pts)
+                </Link>
+              </div>
+            )}
+          </CardBody>
+        </Card>
+      </section>
     </div>
+  );
+}
+
+/** Lado de um confronto no card do Brasil — texto branco sobre fundo escuro. */
+function BrazilSide({
+  team,
+  placeholder,
+  reverse = false,
+}: {
+  team: { name: string; code: string; flagUrl: string } | null;
+  placeholder: string | null;
+  reverse?: boolean;
+}) {
+  if (!team) {
+    return (
+      <span className="text-sm font-medium italic text-white/70">
+        {placeholder ?? "A definir"}
+      </span>
+    );
+  }
+  return (
+    <span
+      className={cn(
+        "flex min-w-0 items-center gap-2",
+        reverse && "flex-row-reverse"
+      )}
+    >
+      <TeamFlag
+        flagUrl={team.flagUrl}
+        name={team.name}
+        code={team.code}
+        size="sm"
+      />
+      <span className="truncate">{team.name}</span>
+    </span>
   );
 }

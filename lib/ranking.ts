@@ -17,6 +17,8 @@ export interface RankingRow {
   resultCount: number;
   scoredPredictions: number;
   championPoints: number;
+  /** Soma dos ajustes manuais do admin (bônus/penalidade); 0 no ranking por fase */
+  adjustmentPoints: number;
   createdAt: Date;
 }
 
@@ -25,7 +27,7 @@ export interface RankingRow {
  * fase (o bônus de campeão entra somente no ranking geral).
  */
 export async function computeRanking(stage?: Stage): Promise<RankingRow[]> {
-  const [users, predictions] = await Promise.all([
+  const [users, predictions, adjustments] = await Promise.all([
     prisma.user.findMany({
       select: {
         id: true,
@@ -48,20 +50,35 @@ export async function computeRanking(stage?: Stage): Promise<RankingRow[]> {
         match: { select: { homeScore: true, awayScore: true } },
       },
     }),
+    // Ajustes manuais entram só no ranking geral (como o bônus de campeão).
+    stage
+      ? Promise.resolve(
+          [] as { userId: string; _sum: { delta: number | null } }[]
+        )
+      : prisma.pointAdjustment.groupBy({
+          by: ["userId"],
+          _sum: { delta: true },
+        }),
   ]);
+
+  const adjustmentByUser = new Map<string, number>(
+    adjustments.map((a) => [a.userId, a._sum.delta ?? 0])
+  );
 
   const rows = new Map<string, RankingRow>();
   for (const user of users) {
     const championPoints = stage ? 0 : (user.championPick?.points ?? 0);
+    const adjustmentPoints = stage ? 0 : (adjustmentByUser.get(user.id) ?? 0);
     rows.set(user.id, {
       position: 0,
       userId: user.id,
       name: user.name,
-      totalPoints: championPoints,
+      totalPoints: championPoints + adjustmentPoints,
       exactCount: 0,
       resultCount: 0,
       scoredPredictions: 0,
       championPoints,
+      adjustmentPoints,
       createdAt: user.createdAt,
     });
   }

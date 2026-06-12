@@ -228,6 +228,99 @@ export async function setPredictionPointsBatch(
   return { ok: true, data: { updated: parsed.data.length } };
 }
 
+// ── Ajuste manual de pontos por usuário (bônus/penalidade) ───────────────────
+
+export interface UserAdjustmentRow {
+  id: string;
+  delta: number;
+  reason: string | null;
+  /** ISO UTC */
+  createdAt: string;
+}
+
+/** Lista os ajustes de pontos de um usuário e o total acumulado. */
+export async function adminListUserAdjustments(
+  userId: string
+): Promise<ActionResult<{ rows: UserAdjustmentRow[]; total: number }>> {
+  if (!(await requireAdmin())) return { ok: false, error: "Acesso negado." };
+
+  const adjustments = await prisma.pointAdjustment.findMany({
+    where: { userId },
+    orderBy: { createdAt: "desc" },
+  });
+  const rows: UserAdjustmentRow[] = adjustments.map((a) => ({
+    id: a.id,
+    delta: a.delta,
+    reason: a.reason,
+    createdAt: a.createdAt.toISOString(),
+  }));
+  const total = rows.reduce((sum, r) => sum + r.delta, 0);
+  return { ok: true, data: { rows, total } };
+}
+
+const adjustmentSchema = z.object({
+  userId: z.string().min(1),
+  delta: z
+    .number()
+    .int()
+    .min(-1000)
+    .max(1000)
+    .refine((n) => n !== 0, "Informe um valor diferente de zero."),
+  reason: z.string().trim().max(120).optional(),
+});
+
+export type AddUserAdjustmentInput = z.input<typeof adjustmentSchema>;
+
+/** Acrescenta (delta > 0) ou remove (delta < 0) pontos de um usuário. */
+export async function addUserAdjustment(
+  input: AddUserAdjustmentInput
+): Promise<ActionResult<UserAdjustmentRow>> {
+  if (!(await requireAdmin())) return { ok: false, error: "Acesso negado." };
+
+  const parsed = adjustmentSchema.safeParse(input);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error:
+        parsed.error.issues[0]?.message ??
+        "Ajuste inválido (use inteiros de -1000 a 1000, ≠ 0).",
+    };
+  }
+  const { userId, delta, reason } = parsed.data;
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true },
+  });
+  if (!user) return { ok: false, error: "Usuário não encontrado." };
+
+  const created = await prisma.pointAdjustment.create({
+    data: { userId, delta, reason: reason && reason.length > 0 ? reason : null },
+  });
+
+  revalidateAll();
+  return {
+    ok: true,
+    data: {
+      id: created.id,
+      delta: created.delta,
+      reason: created.reason,
+      createdAt: created.createdAt.toISOString(),
+    },
+  };
+}
+
+/** Remove um lançamento de ajuste de pontos. */
+export async function deleteUserAdjustment(
+  adjustmentId: string
+): Promise<ActionResult> {
+  if (!(await requireAdmin())) return { ok: false, error: "Acesso negado." };
+
+  await prisma.pointAdjustment.delete({ where: { id: adjustmentId } });
+  revalidateAll();
+  return { ok: true };
+}
+
 export async function setUserRoleAction(
   userId: string,
   role: "USER" | "ADMIN"

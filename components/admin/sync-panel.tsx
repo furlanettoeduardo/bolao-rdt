@@ -3,7 +3,7 @@
 // Painel de sincronização manual — dispara o sync com a API externa e
 // lista as últimas execuções registradas no SyncLog.
 
-import { useState, useTransition } from "react";
+import { useMemo, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { FormError, FormSuccess } from "@/components/ui/input";
@@ -33,9 +33,20 @@ function formatDuration(durationMs: number | null): string {
   })} s`;
 }
 
+const PAGE_SIZE = 8;
+
 export function SyncPanel({ logs }: { logs: SyncLogDTO[] }) {
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
   const [isPending, startTransition] = useTransition();
+  const [page, setPage] = useState(0);
+
+  const pageCount = Math.max(1, Math.ceil(logs.length / PAGE_SIZE));
+  // Mantém a página válida caso a lista encolha entre renders (ex.: revalidação)
+  const safePage = Math.min(page, pageCount - 1);
+  const pageLogs = useMemo(
+    () => logs.slice(safePage * PAGE_SIZE, safePage * PAGE_SIZE + PAGE_SIZE),
+    [logs, safePage]
+  );
 
   function handleSync() {
     setFeedback({ kind: "idle" });
@@ -79,8 +90,9 @@ export function SyncPanel({ logs }: { logs: SyncLogDTO[] }) {
             Nenhuma sincronização registrada ainda.
           </p>
         ) : (
+          <>
           <ul className="mt-2 divide-y divide-slate-100">
-            {logs.map((log) => (
+            {pageLogs.map((log) => (
               <li key={log.id} className="flex items-start gap-2 py-2 text-sm">
                 {log.ok ? (
                   <span
@@ -119,6 +131,32 @@ export function SyncPanel({ logs }: { logs: SyncLogDTO[] }) {
               </li>
             ))}
           </ul>
+          {pageCount > 1 ? (
+            <div className="mt-2 flex items-center justify-between gap-2 border-t border-slate-100 pt-2">
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={safePage === 0}
+              >
+                ← Anteriores
+              </Button>
+              <span className="text-xs tabular-nums text-slate-500">
+                Página {safePage + 1} de {pageCount}
+              </span>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() =>
+                  setPage((p) => Math.min(pageCount - 1, p + 1))
+                }
+                disabled={safePage >= pageCount - 1}
+              >
+                Mais antigas →
+              </Button>
+            </div>
+          ) : null}
+          </>
         )}
 
         <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-400">

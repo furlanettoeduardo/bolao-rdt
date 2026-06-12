@@ -5,8 +5,8 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { MatchEditor, type AdminMatch } from "@/components/admin/match-editor";
-import { PointsEditor } from "@/components/admin/points-editor";
 import { SyncPanel, type SyncLogDTO } from "@/components/admin/sync-panel";
+import { UserPointsAdjuster } from "@/components/admin/user-points-adjuster";
 import { UsersTable, type AdminUser } from "@/components/admin/users-table";
 import { prisma } from "@/lib/db";
 import { STAGE_LABELS } from "@/lib/format";
@@ -25,7 +25,7 @@ export default async function AdminPage() {
   if (session?.user?.role !== "ADMIN") redirect("/");
 
   const [syncLogs, users, matches] = await Promise.all([
-    getSyncLogs(20),
+    getSyncLogs(120),
     listUsers(),
     prisma.match.findMany({
       include: {
@@ -94,7 +94,7 @@ export default async function AdminPage() {
         <MatchEditor matches={adminMatches} />
       </div>
 
-      <PointsEditor matches={adminMatches} />
+      <UserPointsAdjuster users={adminUsers} />
 
       <UsersTable users={adminUsers} currentUserId={session.user.id} />
     </div>

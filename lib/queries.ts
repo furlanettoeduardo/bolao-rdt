@@ -178,6 +178,48 @@ export async function hasLiveMatches(): Promise<boolean> {
   return count > 0;
 }
 
+export interface NextBrazilMatch {
+  match: MatchDTO;
+  /** true quando o Brasil já está em campo (bola rolando / intervalo) */
+  live: boolean;
+}
+
+/**
+ * Próximo jogo do Brasil para a contagem regressiva da home. Prioriza um jogo
+ * ao vivo; senão, o próximo agendado no futuro. Retorna null se o Brasil ainda
+ * não tem confronto definido (placeholders) ou já jogou tudo.
+ */
+export async function getNextBrazilMatch(): Promise<NextBrazilMatch | null> {
+  const brazil = await prisma.team.findFirst({
+    where: { code: "BRA" },
+    select: { id: true },
+  });
+  if (!brazil) return null;
+
+  const involvesBrazil = [
+    { homeTeamId: brazil.id },
+    { awayTeamId: brazil.id },
+  ];
+
+  const live = await prisma.match.findFirst({
+    where: { status: { in: ["IN_PLAY", "PAUSED"] }, OR: involvesBrazil },
+    include: withTeams,
+    orderBy: { kickoff: "asc" },
+  });
+  if (live) return { match: toMatchDTO(live), live: true };
+
+  const upcoming = await prisma.match.findFirst({
+    where: {
+      status: "SCHEDULED",
+      kickoff: { gt: new Date() },
+      OR: involvesBrazil,
+    },
+    include: withTeams,
+    orderBy: { kickoff: "asc" },
+  });
+  return upcoming ? { match: toMatchDTO(upcoming), live: false } : null;
+}
+
 /** Jogos de mata-mata na ordem do chaveamento */
 export async function getKnockoutMatches(): Promise<MatchDTO[]> {
   const matches = await prisma.match.findMany({
@@ -216,15 +258,23 @@ export async function getUserPredictionsMap(
   return new Map(predictions.map((p) => [p.matchId, toPredictionDTO(p)]));
 }
 
-/** Próximos jogos abertos para os quais o usuário ainda não palpitou */
+/**
+ * Próximos jogos abertos para os quais o usuário ainda não palpitou. Considera
+ * apenas confrontos com os DOIS times já definidos — jogos com placeholder
+ * ("1º do Grupo A") ainda não contam como palpite pendente. Inclui adiados
+ * (POSTPONED) remarcados para o futuro, espelhando `isMatchLocked` (que não
+ * trava esses) — mantém esta contagem igual à de /palpites.
+ */
 export async function getPendingMatches(
   userId: string,
   limit = 8
 ): Promise<MatchDTO[]> {
   const matches = await prisma.match.findMany({
     where: {
-      status: "SCHEDULED",
+      status: { in: ["SCHEDULED", "POSTPONED"] },
       kickoff: { gt: new Date() },
+      homeTeamId: { not: null },
+      awayTeamId: { not: null },
       predictions: { none: { userId } },
     },
     include: withTeams,

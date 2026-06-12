@@ -51,6 +51,7 @@ model User {
   createdAt    DateTime     @default(now())
   predictions  Prediction[]
   championPick ChampionPick?
+  pointAdjustments PointAdjustment[]
 }
 
 model Team {
@@ -198,4 +199,19 @@ model SyncLog {
   scope      String // "window" | "full" | "manual" | "rescore"
   message    String
   durationMs Int?
+}
+
+// Ajuste manual de pontos por usuário (bônus/penalidade do admin). Cada
+// lançamento soma `delta` (pode ser negativo) ao total do usuário no ranking
+// geral — independente dos palpites. Mantém histórico e motivo.
+model PointAdjustment {
+  id        String   @id @default(cuid())
+  userId    String
+  delta     Int
+  reason    String?
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

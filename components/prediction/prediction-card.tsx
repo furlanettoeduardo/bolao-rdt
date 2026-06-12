@@ -6,12 +6,24 @@
 // A trava REAL é validada no servidor (UTC); aqui é só UX.
 
 import Link from "next/link";
-import { useMemo, useState, useTransition } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useTransition,
+  type FocusEvent,
+} from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { LocalTime } from "@/components/local-time";
 import { MatchStatusBadge } from "@/components/match-status-badge";
 import { TeamLabel } from "@/components/team-label";
+import {
+  usePredictionsBoard,
+  type PredictionDraft,
+} from "@/components/prediction/predictions-board";
 import { savePrediction } from "@/lib/actions/predictions";
 import { cn } from "@/lib/cn";
 import { MAX_GOALS } from "@/lib/config";
@@ -46,6 +58,10 @@ export function PredictionCard({
   );
   const [state, setState] = useState<SaveState>({ kind: "idle" });
   const [isPending, startTransition] = useTransition();
+  // Guarda síncrona contra salvamento duplo (ex.: blur + clique no botão na
+  // mesma interação, antes de isPending refletir no próximo render).
+  const savingRef = useRef(false);
+  const board = usePredictionsBoard();
 
   const isKnockout = match.stage !== "GROUP";
   const homeNum = home === "" ? null : Number(home);
@@ -75,23 +91,84 @@ export function PredictionCard({
     awayNum <= MAX_GOALS &&
     (!needsAdvancing || (canChooseAdvancing && advancing != null));
 
-  function submit() {
-    if (!valid || locked) return;
+  const saveable = !locked && isDirty && valid;
+
+  const submit = useCallback(() => {
+    if (savingRef.current || !valid || locked || !isDirty) return;
+    savingRef.current = true;
     setState({ kind: "saving" });
     startTransition(async () => {
-      const result = await savePrediction({
-        matchId: match.id,
-        homeScore: homeNum!,
-        awayScore: awayNum!,
-        advancingTeamId: needsAdvancing ? advancing : null,
-      });
-      if (result.ok) {
-        setState({ kind: "saved" });
-      } else {
-        setState({ kind: "error", message: result.error });
+      try {
+        const result = await savePrediction({
+          matchId: match.id,
+          homeScore: homeNum!,
+          awayScore: awayNum!,
+          advancingTeamId: needsAdvancing ? advancing : null,
+        });
+        if (result.ok) {
+          setState({ kind: "saved" });
+        } else {
+          setState({ kind: "error", message: result.error });
+        }
+      } finally {
+        savingRef.current = false;
       }
     });
+  }, [valid, locked, isDirty, match.id, homeNum, awayNum, needsAdvancing, advancing]);
+
+  // Auto-save ao sair do bloco de placar/escolha (onBlur), quando o foco vai
+  // para fora do card. Salva apenas o que está válido e alterado.
+  function handleBlurSave(event: FocusEvent<HTMLDivElement>) {
+    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+    if (saveable) submit();
   }
+
+  // Registra o rascunho deste card no board para o botão "Salvar todos".
+  // O ref é atualizado num effect (nunca durante o render) para o getter
+  // registrado sempre devolver os valores do último commit.
+  const draftRef = useRef<PredictionDraft>({
+    matchId: match.id,
+    homeScore: homeNum ?? 0,
+    awayScore: awayNum ?? 0,
+    advancingTeamId: needsAdvancing ? advancing : null,
+    saveable,
+  });
+  useEffect(() => {
+    draftRef.current = {
+      matchId: match.id,
+      homeScore: homeNum ?? 0,
+      awayScore: awayNum ?? 0,
+      advancingTeamId: needsAdvancing ? advancing : null,
+      saveable,
+    };
+  });
+  useEffect(() => {
+    if (!board) return;
+    return board.register(match.id, () => draftRef.current);
+  }, [board, match.id]);
+  useEffect(() => {
+    board?.report();
+  }, [board, saveable]);
+
+  // Ao editar o palpite, descarta uma mensagem de erro antiga — senão ela
+  // ficaria na tela mesmo depois de o campo virar vazio/não-salvável.
+  const clearError = useCallback(() => {
+    setState((s) => (s.kind === "error" ? { kind: "idle" } : s));
+  }, []);
+  const handleHome = useCallback(
+    (v: string) => {
+      setHome(v);
+      clearError();
+    },
+    [clearError]
+  );
+  const handleAway = useCallback(
+    (v: string) => {
+      setAway(v);
+      clearError();
+    },
+    [clearError]
+  );
 
   const stageLabel =
     match.stage === "GROUP" && match.group
@@ -131,19 +208,20 @@ export function PredictionCard({
         </span>
       </div>
 
+      <div onBlur={handleBlurSave}>
       <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <TeamLabel team={match.homeTeam} placeholder={match.homePlaceholder} bold />
         <div className="flex items-center gap-1.5">
           <ScoreInput
             value={home}
-            onChange={setHome}
+            onChange={handleHome}
             disabled={locked || isPending}
             label={`Gols de ${match.homeTeam?.name ?? "time da casa"}`}
           />
           <span className="text-sm font-bold text-slate-400">×</span>
           <ScoreInput
             value={away}
-            onChange={setAway}
+            onChange={handleAway}
             disabled={locked || isPending}
             label={`Gols de ${match.awayTeam?.name ?? "time visitante"}`}
           />
@@ -179,7 +257,10 @@ export function PredictionCard({
                     name={`advancing-${match.id}`}
                     value={team.id}
                     checked={advancing === team.id}
-                    onChange={() => setAdvancing(team.id)}
+                    onChange={() => {
+                      setAdvancing(team.id);
+                      clearError();
+                    }}
                     className="sr-only"
                   />
                   {team.code}
@@ -193,6 +274,7 @@ export function PredictionCard({
           </p>
         )
       ) : null}
+      </div>
 
       {!locked ? (
         <div className="mt-3 flex items-center justify-between gap-2">
@@ -242,28 +324,74 @@ function ScoreInput({
   disabled: boolean;
   label: string;
 }) {
+  // A partir do campo vazio, a 1ª seta (pra cima OU pra baixo) leva a 0; só
+  // depois sobe para 1, 2… Resolve o vai-e-volta de ter que clicar 1→0.
+  const step = (delta: 1 | -1) => {
+    if (disabled) return;
+    const base = value === "" ? (delta > 0 ? -1 : 0) : Number(value);
+    const next = Math.min(MAX_GOALS, Math.max(0, base + delta));
+    onChange(String(next));
+  };
+
   return (
-    <input
-      type="number"
-      inputMode="numeric"
-      min={0}
-      max={MAX_GOALS}
-      step={1}
-      value={value}
-      placeholder="–"
-      aria-label={label}
-      disabled={disabled}
-      onChange={(e) => {
-        const v = e.target.value;
-        if (v === "" || (/^\d{1,2}$/.test(v) && Number(v) <= MAX_GOALS)) {
-          onChange(v);
-        }
-      }}
-      className={cn(
-        "h-10 w-11 rounded-lg border border-slate-300 text-center text-base font-bold tabular-nums",
-        "focus:border-field-600 focus:outline-2 focus:outline-field-600/30",
-        "disabled:bg-slate-100 disabled:text-slate-500"
-      )}
-    />
+    <div className="relative">
+      <input
+        type="number"
+        inputMode="numeric"
+        min={0}
+        max={MAX_GOALS}
+        step={1}
+        value={value}
+        placeholder="–"
+        aria-label={label}
+        disabled={disabled}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "" || (/^\d{1,2}$/.test(v) && Number(v) <= MAX_GOALS)) {
+            onChange(v);
+          }
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowUp") {
+            e.preventDefault();
+            step(1);
+          } else if (e.key === "ArrowDown") {
+            e.preventDefault();
+            step(-1);
+          }
+        }}
+        className={cn(
+          // Esconde o spinner nativo — usamos o nosso, que começa do zero.
+          "h-10 w-12 rounded-lg border border-slate-300 pl-1 pr-4 text-center text-base font-bold tabular-nums",
+          "[appearance:textfield] [&::-webkit-inner-spin-button]:m-0 [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none",
+          "focus:border-field-600 focus:outline-2 focus:outline-field-600/30",
+          "disabled:bg-slate-100 disabled:text-slate-500"
+        )}
+      />
+      <span className="absolute inset-y-0 right-0 flex w-4 flex-col">
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          disabled={disabled}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => step(1)}
+          className="flex flex-1 items-center justify-center rounded-tr-lg text-[9px] leading-none text-slate-400 hover:bg-slate-100 hover:text-field-700 disabled:opacity-40"
+        >
+          ▲
+        </button>
+        <button
+          type="button"
+          tabIndex={-1}
+          aria-hidden
+          disabled={disabled}
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => step(-1)}
+          className="flex flex-1 items-center justify-center rounded-br-lg text-[9px] leading-none text-slate-400 hover:bg-slate-100 hover:text-field-700 disabled:opacity-40"
+        >
+          ▼
+        </button>
+      </span>
+    </div>
   );
 }
