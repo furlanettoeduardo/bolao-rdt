@@ -32,4 +32,4 @@ export const COMPETITION = {
   code: "WC",
 } as const;
 
-export const APP_NAME = "Bolão da Copa 2026";
+export const APP_NAME = "Bolão da Copa 2026 · Urussanga";

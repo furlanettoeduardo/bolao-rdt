@@ -16,10 +16,10 @@ export async function Header() {
         <div className="mx-auto flex h-14 w-full max-w-5xl items-center justify-between gap-4 px-4">
           <Link
             href="/"
-            className="flex items-center gap-2 text-base font-bold tracking-tight"
+            className="flex min-w-0 items-center gap-2 text-sm font-bold tracking-tight sm:text-base"
           >
             <span aria-hidden>⚽</span>
-            <span>{APP_NAME}</span>
+            <span className="truncate">{APP_NAME}</span>
           </Link>
 
           {session?.user ? (

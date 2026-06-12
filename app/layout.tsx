@@ -11,7 +11,7 @@ export const metadata: Metadata = {
     template: `%s · ${APP_NAME}`,
   },
   description:
-    "Bolão da Copa do Mundo FIFA 2026 — registre seus palpites, acompanhe os placares quase em tempo real e dispute o ranking com os amigos.",
+    "Bolão da Copa do Mundo FIFA 2026 em Urussanga — registre seus palpites, acompanhe os placares quase em tempo real e dispute o ranking da cidade.",
 };
 
 export const viewport: Viewport = {
