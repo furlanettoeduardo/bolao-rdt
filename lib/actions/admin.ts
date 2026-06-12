@@ -14,7 +14,14 @@ import type { ActionResult, MatchStatus } from "@/lib/types";
 
 async function requireAdmin(): Promise<string | null> {
   const session = await auth();
-  if (!session?.user?.id || session.user.role !== "ADMIN") return null;
+  if (!session?.user?.id) return null;
+  // Revalida a role contra o banco — o claim do JWT pode estar defasado por até
+  // a vida do token (admin rebaixado via setUserRoleAction, ou conta excluída).
+  const user = await prisma.user.findUnique({
+    where: { id: session.user.id },
+    select: { role: true },
+  });
+  if (!user || user.role !== "ADMIN") return null;
   return session.user.id;
 }
 
@@ -109,10 +116,10 @@ export async function updateMatchAction(
     data: { status, homeScore, awayScore, advancingTeamId },
   });
 
-  if (finished) {
-    await rescoreMatch(matchId);
-    await creditChampionIfFinalFinished();
-  }
+  // Repontua sempre: ao finalizar, calcula os pontos; ao "des-finalizar" um
+  // jogo (correção de engano), rescoreMatch zera os pontos antigos.
+  await rescoreMatch(matchId);
+  await creditChampionIfFinalFinished();
 
   await prisma.syncLog.create({
     data: {
