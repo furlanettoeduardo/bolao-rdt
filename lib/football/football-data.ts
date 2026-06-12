@@ -113,10 +113,15 @@ function mapStatus(status: string): MatchStatus {
   return STATUS_MAP[status] ?? "SCHEDULED";
 }
 
-/** "GROUP_A" → "A" */
+/**
+ * Normaliza o grupo para a letra A–L, aceitando os vários formatos que a API
+ * usa: "GROUP_A" (endpoint de matches), "Group J" (endpoint de standings),
+ * "Grupo A" ou já "A". Retorna null para qualquer coisa fora de A–L.
+ */
 function mapGroup(group: string | null): string | null {
   if (!group) return null;
-  return group.replace(/^GROUP_/, "");
+  const m = group.match(/([A-L])\s*$/i);
+  return m?.[1]?.toUpperCase() ?? null;
 }
 
 function pair(p: FDScorePair | undefined): ProviderScore | null {
