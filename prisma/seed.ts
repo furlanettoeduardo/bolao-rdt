@@ -18,6 +18,7 @@ try {
 }
 
 import { getProvider } from "../lib/football/provider";
+import { isFinishedStatus } from "../lib/match-rules";
 
 const prisma = new PrismaClient();
 
@@ -115,10 +116,26 @@ async function main() {
 
     const existing = await prisma.match.findUnique({
       where: { externalId: m.externalId },
-      select: { id: true },
+      select: { id: true, status: true },
     });
     if (existing) {
-      await prisma.match.update({ where: { id: existing.id }, data });
+      // Não reverte o resultado de um jogo já finalizado no banco (ex.: correção
+      // manual feita no /admin). Sobrescrever o placar sem repontuar deixaria os
+      // pontos inconsistentes — então preserva placar/status e atualiza só os
+      // metadados (horário, local, times, placeholders).
+      const updateData = isFinishedStatus(existing.status)
+        ? {
+            ...data,
+            status: undefined,
+            homeScore: undefined,
+            awayScore: undefined,
+            homeScoreET: undefined,
+            awayScoreET: undefined,
+            homePenalties: undefined,
+            awayPenalties: undefined,
+          }
+        : data;
+      await prisma.match.update({ where: { id: existing.id }, data: updateData });
       updated++;
     } else {
       await prisma.match.create({
