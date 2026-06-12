@@ -6,11 +6,10 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { LiveRefresh } from "@/components/live-refresh";
-import { LocalTime } from "@/components/local-time";
 import { PredictionCard } from "@/components/prediction/prediction-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/cn";
-import { dayKey } from "@/lib/format";
+import { dayKey, formatDayHeading } from "@/lib/format";
 import { isFinishedStatus, isMatchLocked } from "@/lib/match-rules";
 import { getUserPredictionsMap, listMatches } from "@/lib/queries";
 import type { MatchDTO } from "@/lib/types";
@@ -169,11 +168,9 @@ export default async function PalpitesPage({
             return (
               <section key={key} className="flex flex-col gap-3">
                 <h2 className="flex items-center gap-3 text-sm font-bold uppercase tracking-wide text-field-800">
-                  <LocalTime
-                    iso={first.kickoff}
-                    mode="day-heading"
-                    className="capitalize"
-                  />
+                  <span className="capitalize">
+                    {formatDayHeading(first.kickoff)}
+                  </span>
                   <span
                     aria-hidden
                     className="h-px flex-1 bg-slate-200"

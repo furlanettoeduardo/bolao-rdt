@@ -6,11 +6,10 @@ import { redirect } from "next/navigation";
 import type { ReactNode } from "react";
 import { auth } from "@/auth";
 import { LiveRefresh } from "@/components/live-refresh";
-import { LocalTime } from "@/components/local-time";
 import { MatchCard } from "@/components/match-card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/cn";
-import { STAGE_LABELS, dayKey } from "@/lib/format";
+import { STAGE_LABELS, dayKey, formatDayHeading } from "@/lib/format";
 import {
   GROUP_LETTERS,
   getUserPredictionsMap,
@@ -252,7 +251,7 @@ export default async function JogosPage({
             return (
               <section key={key} aria-label={`Jogos do dia ${key}`} className="space-y-2">
                 <h2 className="text-sm font-semibold capitalize text-slate-600">
-                  <LocalTime iso={first.kickoff} mode="day-heading" />
+                  {formatDayHeading(first.kickoff)}
                 </h2>
                 <div className="grid gap-2 sm:grid-cols-2">
                   {dayMatches.map((match) => (
