@@ -1,0 +1,68 @@
+@import "tailwindcss";
+
+/* Identidade visual inspirada na Copa 2026 (EUA/México/Canadá):
+   verde-campo como cor primária, com o trio vermelho/verde/azul do
+   torneio em detalhes (barra tricolor, destaques). */
+@theme {
+  --color-field-50: #effaf3;
+  --color-field-100: #d9f2e3;
+  --color-field-200: #b5e4ca;
+  --color-field-300: #84cfaa;
+  --color-field-400: #51b385;
+  --color-field-500: #2e9669;
+  --color-field-600: #1f7954;
+  --color-field-700: #196045;
+  --color-field-800: #164d39;
+  --color-field-900: #133f30;
+  --color-field-950: #09231b;
+
+  --color-cup-red: #c8102e;
+  --color-cup-green: #007a33;
+  --color-cup-blue: #00549f;
+  --color-cup-gold: #d4a017;
+
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Helvetica Neue", Arial, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  @apply bg-slate-100 text-slate-900 antialiased;
+}
+
+/* Barra tricolor da Copa 2026 — usada no topo do site */
+.cup-stripe {
+  background: linear-gradient(
+    90deg,
+    var(--color-cup-red) 0%,
+    var(--color-cup-red) 33.3%,
+    var(--color-cup-green) 33.3%,
+    var(--color-cup-green) 66.6%,
+    var(--color-cup-blue) 66.6%,
+    var(--color-cup-blue) 100%
+  );
+}
+
+/* Badge pulsante de jogo ao vivo */
+@keyframes live-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.45;
+  }
+}
+
+.live-dot {
+  animation: live-pulse 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-dot {
+    animation: none;
+  }
+}
