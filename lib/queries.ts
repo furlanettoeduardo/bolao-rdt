@@ -8,6 +8,7 @@ import { prisma } from "./db";
 import { computeRanking, type RankingRow } from "./ranking";
 import { arePredictionsVisible, isLiveStatus, isMatchLocked } from "./match-rules";
 import { STAGE_ORDER } from "./format";
+import { teamNamePt } from "./team-names";
 import type { MatchDTO, Stage, TeamDTO } from "./types";
 
 // ── DTOs ─────────────────────────────────────────────────────────────────────
@@ -15,7 +16,7 @@ import type { MatchDTO, Stage, TeamDTO } from "./types";
 export function toTeamDTO(team: Team): TeamDTO {
   return {
     id: team.id,
-    name: team.name,
+    name: teamNamePt(team.code, team.name),
     code: team.code,
     flagUrl: team.flagUrl,
     group: team.group,
