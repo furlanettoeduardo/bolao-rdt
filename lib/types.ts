@@ -54,6 +54,9 @@ export interface MatchDTO {
   venue: string | null;
   city: string | null;
   referee: string | null;
+  /** Cronômetro interno do jogo ao vivo (ISO) — base do minuto calculado no cliente */
+  liveSegmentStart: string | null;
+  clockBaseMinutes: number | null;
 }
 
 export type ActionResult<T = undefined> =

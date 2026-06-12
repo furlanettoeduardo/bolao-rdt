@@ -50,7 +50,29 @@ export function toMatchDTO(match: MatchWithTeams): MatchDTO {
     venue: match.venue,
     city: match.city,
     referee: match.referee,
+    liveSegmentStart: match.liveSegmentStart
+      ? match.liveSegmentStart.toISOString()
+      : null,
+    clockBaseMinutes: match.clockBaseMinutes,
   };
+}
+
+export interface MatchGoalDTO {
+  side: "HOME" | "AWAY";
+  /** Minuto estimado pelo cronômetro interno; null quando não pôde ser estimado */
+  minute: number | null;
+}
+
+/** Gols detectados pela mudança de placar (sem autor; minuto estimado). */
+export async function getMatchGoals(matchId: string): Promise<MatchGoalDTO[]> {
+  const goals = await prisma.matchGoal.findMany({
+    where: { matchId },
+    orderBy: [{ minute: "asc" }, { createdAt: "asc" }],
+  });
+  return goals.map((g) => ({
+    side: g.side === "AWAY" ? "AWAY" : "HOME",
+    minute: g.minute,
+  }));
 }
 
 export interface PredictionDTO {

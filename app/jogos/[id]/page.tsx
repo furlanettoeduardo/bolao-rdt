@@ -27,10 +27,12 @@ import {
 } from "@/lib/match-rules";
 import {
   getMatchById,
+  getMatchGoals,
   getMatchParticipation,
   getMatchPredictions,
   getUserPredictionsMap,
   isMatchLocked,
+  type MatchGoalDTO,
   type PredictionDTO,
 } from "@/lib/queries";
 import type { MatchDTO, TeamDTO } from "@/lib/types";
@@ -78,6 +80,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
 
   const locked = isMatchLocked(match);
   const revealed = arePredictionsVisible(match);
+  const goals = await getMatchGoals(match.id);
   const myPredictions = await getUserPredictionsMap(userId);
   const myPrediction = myPredictions.get(match.id) ?? null;
   const advancingTeam = teamInMatch(match, match.advancingTeamId);
@@ -143,6 +146,8 @@ export default async function MatchDetailPage({ params }: PageProps) {
         </CardBody>
       </Card>
 
+      {goals.length > 0 ? <GoalsCard match={match} goals={goals} /> : null}
+
       {revealed ? (
         <LockedSections
           match={match}
@@ -158,6 +163,46 @@ export default async function MatchDetailPage({ params }: PageProps) {
         />
       )}
     </div>
+  );
+}
+
+// ── Gols (detectados pela mudança de placar; sem autor, minuto estimado) ─────
+
+function GoalsCard({
+  match,
+  goals,
+}: {
+  match: MatchDTO;
+  goals: MatchGoalDTO[];
+}) {
+  return (
+    <Card>
+      <CardHeader
+        title="Gols"
+        subtitle="Minutos estimados pelo sistema — o autor não está disponível no plano gratuito"
+      />
+      <CardBody className="p-0">
+        <ul className="divide-y divide-slate-100">
+          {goals.map((g, i) => {
+            const team = g.side === "HOME" ? match.homeTeam : match.awayTeam;
+            const name =
+              team?.name ?? (g.side === "HOME" ? "Mandante" : "Visitante");
+            return (
+              <li
+                key={`${g.side}-${i}`}
+                className="flex items-center gap-3 px-4 py-2.5 text-sm"
+              >
+                <span aria-hidden>⚽</span>
+                <span className="w-12 shrink-0 tabular-nums text-slate-500">
+                  {g.minute != null ? `~${g.minute}ʼ` : "—"}
+                </span>
+                <span className="font-medium text-slate-800">{name}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </CardBody>
+    </Card>
   );
 }
 

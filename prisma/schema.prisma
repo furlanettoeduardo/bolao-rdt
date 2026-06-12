@@ -100,6 +100,14 @@ model Match {
   venue     String?
   city      String?
   referee   String? // nome do árbitro principal, quando a API informar
+
+  // Cronômetro interno do jogo ao vivo (NÃO vem da API): início do segmento em
+  // andamento e minutos já acumulados antes dele. Congela no intervalo e
+  // recomeça quando o jogo volta a ficar ao vivo. O minuto é calculado no
+  // cliente a partir destes dois campos.
+  liveSegmentStart DateTime?
+  clockBaseMinutes Int?
+
   updatedAt DateTime @updatedAt
 
   homeTeam      Team? @relation("HomeTeam", fields: [homeTeamId], references: [id])
@@ -108,6 +116,7 @@ model Match {
   advancingTeam Team? @relation("AdvancingTeam", fields: [advancingTeamId], references: [id])
 
   predictions Prediction[]
+  goals       MatchGoal[]
 
   @@index([kickoff])
   @@index([status])
@@ -146,6 +155,20 @@ model ChampionPick {
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
   team Team @relation(fields: [teamId], references: [id])
+}
+
+// Gol detectado pela mudança de placar no sync. O autor não é gravado (a API
+// gratuita não fornece); o minuto é estimado pelo cronômetro interno.
+model MatchGoal {
+  id        String   @id @default(cuid())
+  matchId   String
+  side      String // "HOME" | "AWAY"
+  minute    Int? // estimado; null se o gol foi detectado com o jogo já finalizado
+  createdAt DateTime @default(now())
+
+  match Match @relation(fields: [matchId], references: [id], onDelete: Cascade)
+
+  @@index([matchId])
 }
 
 model GroupStanding {

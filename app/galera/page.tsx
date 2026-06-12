@@ -122,7 +122,7 @@ function CrowdCard({
           <span>{stageLabel}</span>
           <LocalTime iso={match.kickoff} mode="time" />
         </span>
-        <MatchStatusBadge status={match.status} />
+        <MatchStatusBadge status={match.status} match={match} />
       </div>
 
       <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">

@@ -130,6 +130,97 @@ interface UpsertOutcome {
   needsScoring: boolean;
 }
 
+/**
+ * Cronômetro interno do jogo (a API grátis não fornece o minuto). Mantém o
+ * início do segmento em andamento e os minutos já acumulados; congela no
+ * intervalo e recomeça quando o jogo volta a ficar ao vivo.
+ */
+function nextClock(
+  prevStatus: string | null,
+  prevSegStart: Date | null,
+  prevBase: number | null,
+  newStatus: string,
+  kickoff: Date,
+  now: Date
+): { liveSegmentStart: Date | null; clockBaseMinutes: number } {
+  const base = prevBase ?? 0;
+  if (newStatus === "IN_PLAY") {
+    if (prevStatus === "IN_PLAY" && prevSegStart) {
+      return { liveSegmentStart: prevSegStart, clockBaseMinutes: base };
+    }
+    if (base > 0) {
+      // retomada (ex.: 2º tempo) — cronometra a partir de agora
+      return { liveSegmentStart: now, clockBaseMinutes: base };
+    }
+    // 1º tempo — cronometra desde o kickoff (mais preciso que "agora")
+    const start = kickoff.getTime() <= now.getTime() ? kickoff : now;
+    return { liveSegmentStart: start, clockBaseMinutes: 0 };
+  }
+  if (
+    newStatus === "PAUSED" ||
+    newStatus === "FINISHED" ||
+    newStatus === "AWARDED"
+  ) {
+    if (prevStatus === "IN_PLAY" && prevSegStart) {
+      const mins = Math.max(
+        0,
+        Math.round((now.getTime() - prevSegStart.getTime()) / 60000)
+      );
+      return { liveSegmentStart: null, clockBaseMinutes: base + mins };
+    }
+    return { liveSegmentStart: null, clockBaseMinutes: base };
+  }
+  // SCHEDULED / SUSPENDED / CANCELLED / POSTPONED → zera o cronômetro
+  return { liveSegmentStart: null, clockBaseMinutes: 0 };
+}
+
+/** Minuto estimado "agora" a partir do cronômetro (null se não dá para estimar). */
+function currentMinuteOf(
+  clock: { liveSegmentStart: Date | null; clockBaseMinutes: number },
+  now: Date
+): number | null {
+  if (!clock.liveSegmentStart) {
+    return clock.clockBaseMinutes > 0 ? clock.clockBaseMinutes : null;
+  }
+  const mins = Math.max(
+    0,
+    Math.round((now.getTime() - clock.liveSegmentStart.getTime()) / 60000)
+  );
+  return clock.clockBaseMinutes + mins;
+}
+
+/**
+ * Acerta os gols gravados para bater com o placar do tempo regulamentar.
+ * Os gols são detectados pela mudança de placar; o autor não é gravado (a API
+ * grátis não fornece) e o minuto é estimado pelo cronômetro interno.
+ */
+async function reconcileGoals(
+  matchId: string,
+  homeScore: number | null,
+  awayScore: number | null,
+  minute: number | null
+): Promise<void> {
+  for (const side of ["HOME", "AWAY"] as const) {
+    const target = (side === "HOME" ? homeScore : awayScore) ?? 0;
+    const goals = await prisma.matchGoal.findMany({
+      where: { matchId, side },
+      orderBy: { createdAt: "asc" },
+    });
+    if (target > goals.length) {
+      await prisma.matchGoal.createMany({
+        data: Array.from({ length: target - goals.length }, () => ({
+          matchId,
+          side,
+          minute,
+        })),
+      });
+    } else if (target < goals.length) {
+      const remove = goals.slice(target).map((g) => g.id);
+      await prisma.matchGoal.deleteMany({ where: { id: { in: remove } } });
+    }
+  }
+}
+
 async function upsertMatch(
   pm: ProviderMatch,
   teamByExternalId: Map<number, { id: string; externalId: number; group: string | null }>
@@ -154,18 +245,37 @@ async function upsertMatch(
   const advancingTeamId = knockout && finished ? winnerTeamId : null;
   const penaltyWinnerTeamId = pm.penalties ? winnerTeamId : null;
 
+  const now = new Date();
+  const kickoffDate = new Date(pm.kickoffUtc);
+  const newHome = pm.regulation?.home ?? null;
+  const newAway = pm.regulation?.away ?? null;
+
+  const existing = await prisma.match.findUnique({
+    where: { externalId: pm.externalId },
+  });
+
+  // Cronômetro interno (minuto de jogo) — depende do estado anterior.
+  const clock = nextClock(
+    existing?.status ?? null,
+    existing?.liveSegmentStart ?? null,
+    existing?.clockBaseMinutes ?? null,
+    pm.status,
+    kickoffDate,
+    now
+  );
+
   const data: Prisma.MatchUncheckedUpdateInput = {
     stage: pm.stage,
     group: pm.group,
     matchday: pm.matchday,
-    kickoff: new Date(pm.kickoffUtc),
+    kickoff: kickoffDate,
     status: pm.status,
     homeTeamId,
     awayTeamId,
     homePlaceholder: pm.homePlaceholder,
     awayPlaceholder: pm.awayPlaceholder,
-    homeScore: pm.regulation?.home ?? null,
-    awayScore: pm.regulation?.away ?? null,
+    homeScore: newHome,
+    awayScore: newAway,
     homeScoreET: pm.afterExtraTime?.home ?? null,
     awayScoreET: pm.afterExtraTime?.away ?? null,
     homePenalties: pm.penalties?.home ?? null,
@@ -174,11 +284,9 @@ async function upsertMatch(
     advancingTeamId,
     venue: pm.venue,
     referee: pm.referee,
+    liveSegmentStart: clock.liveSegmentStart,
+    clockBaseMinutes: clock.clockBaseMinutes,
   };
-
-  const existing = await prisma.match.findUnique({
-    where: { externalId: pm.externalId },
-  });
 
   if (!existing) {
     // Resiliência: jogo que não veio no seed (não deve acontecer em condições
@@ -187,11 +295,14 @@ async function upsertMatch(
       data: {
         ...(data as Prisma.MatchUncheckedCreateInput),
         externalId: pm.externalId,
-        kickoff: new Date(pm.kickoffUtc),
+        kickoff: kickoffDate,
         stage: pm.stage,
         status: pm.status,
       },
     });
+    if (newHome != null || newAway != null) {
+      await reconcileGoals(created.id, newHome, newAway, currentMinuteOf(clock, now));
+    }
     return { matchId: created.id, changed: true, needsScoring: finished };
   }
 
@@ -218,6 +329,12 @@ async function upsertMatch(
 
   if (changed) {
     await prisma.match.update({ where: { id: existing.id }, data });
+  }
+
+  // Detecção de gols pela mudança de placar (regulamentar): grava o time e o
+  // minuto estimado pelo cronômetro (sem o autor — indisponível no plano grátis).
+  if (existing.homeScore !== newHome || existing.awayScore !== newAway) {
+    await reconcileGoals(existing.id, newHome, newAway, currentMinuteOf(clock, now));
   }
 
   // Pontua sempre que o jogo está finalizado e algo mudou, ou se há palpites

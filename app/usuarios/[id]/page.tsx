@@ -225,7 +225,7 @@ function HistoryRow({ entry }: { entry: HistoryEntry }) {
               +{prediction.points} pts
             </Badge>
           ) : (
-            <MatchStatusBadge status={match.status} />
+            <MatchStatusBadge status={match.status} match={match} />
           )}
         </div>
 

@@ -92,7 +92,7 @@ export function MatchCard({
           {showStage ? <span>{stageLabel}</span> : null}
           <LocalTime iso={match.kickoff} mode="date" />
         </span>
-        <MatchStatusBadge status={match.status} />
+        <MatchStatusBadge status={match.status} match={match} />
       </div>
 
       <div className="mt-2 grid grid-cols-[1fr_auto_1fr] items-center gap-2">

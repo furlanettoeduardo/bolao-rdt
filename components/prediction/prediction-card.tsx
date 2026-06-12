@@ -127,7 +127,7 @@ export function PredictionCard({
           ) : (
             <Badge variant="warning">Aberto</Badge>
           )}
-          <MatchStatusBadge status={match.status} />
+          <MatchStatusBadge status={match.status} match={match} />
         </span>
       </div>
 
