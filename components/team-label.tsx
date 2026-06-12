@@ -11,6 +11,7 @@ export function TeamLabel({
   flagSize = "md",
   bold = false,
   reverse = false,
+  fullName = false,
   className,
 }: {
   team: TeamDTO | null;
@@ -19,6 +20,8 @@ export function TeamLabel({
   bold?: boolean;
   /** true → nome antes da bandeira (lado direito do confronto) */
   reverse?: boolean;
+  /** true → sempre mostra o nome completo (mesmo no mobile), nunca só a sigla */
+  fullName?: boolean;
   className?: string;
 }) {
   if (!team) {
@@ -55,8 +58,14 @@ export function TeamLabel({
           bold && "font-semibold"
         )}
       >
-        <span className="sm:hidden">{team.code}</span>
-        <span className="hidden sm:inline">{team.name}</span>
+        {fullName ? (
+          team.name
+        ) : (
+          <>
+            <span className="sm:hidden">{team.code}</span>
+            <span className="hidden sm:inline">{team.name}</span>
+          </>
+        )}
       </span>
     </span>
   );

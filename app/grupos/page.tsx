@@ -107,6 +107,7 @@ function GroupTable({ letter, rows }: { letter: string; rows: GroupTableRow[] })
                       team={row.team}
                       placeholder={null}
                       flagSize="sm"
+                      fullName
                     />
                   </th>
                   {STAT_COLUMNS.map((col) => (
@@ -163,7 +164,7 @@ export default async function GruposPage() {
       </header>
 
       {hasTeams ? (
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {GROUP_LETTERS.map((letter) => (
             <GroupTable
               key={letter}
