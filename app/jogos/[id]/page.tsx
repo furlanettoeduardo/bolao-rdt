@@ -128,6 +128,11 @@ export default async function MatchDetailPage({ params }: PageProps) {
               {match.venue ? <span> · {match.venue}</span> : null}
               {match.city ? <span> · {match.city}</span> : null}
             </p>
+            {match.referee ? (
+              <p className="text-center text-xs text-slate-500">
+                <span aria-hidden>🧑‍⚖️</span> Árbitro: {match.referee}
+              </p>
+            ) : null}
           </div>
 
           {knockout && isFinishedStatus(match.status) && advancingTeam ? (

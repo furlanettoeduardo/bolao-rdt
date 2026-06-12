@@ -51,6 +51,12 @@ interface FDMatch {
   awayTeam: FDTeamRef;
   score: FDScore;
   venue?: string | null;
+  referees?: {
+    id: number;
+    name: string | null;
+    type?: string | null;
+    nationality?: string | null;
+  }[];
 }
 
 interface FDStandingTable {
@@ -220,6 +226,10 @@ export class FootballDataProvider implements FootballProvider {
         winnerExternalId: winner,
         venue: m.venue ?? null,
         city: null,
+        referee:
+          m.referees?.find((r) => r.type === "REFEREE")?.name ??
+          m.referees?.[0]?.name ??
+          null,
       };
     });
   }

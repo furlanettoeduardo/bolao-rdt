@@ -53,6 +53,7 @@ export interface MatchDTO {
   advancingTeamId: string | null;
   venue: string | null;
   city: string | null;
+  referee: string | null;
 }
 
 export type ActionResult<T = undefined> =

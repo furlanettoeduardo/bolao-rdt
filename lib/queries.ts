@@ -49,6 +49,7 @@ export function toMatchDTO(match: MatchWithTeams): MatchDTO {
     advancingTeamId: match.advancingTeamId,
     venue: match.venue,
     city: match.city,
+    referee: match.referee,
   };
 }
 

@@ -42,6 +42,8 @@ export interface ProviderMatch {
   winnerExternalId: number | null;
   venue: string | null;
   city: string | null;
+  /** Nome do árbitro principal, quando disponível */
+  referee: string | null;
 }
 
 export interface ProviderStandingRow {

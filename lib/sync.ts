@@ -173,6 +173,7 @@ async function upsertMatch(
     penaltyWinnerTeamId,
     advancingTeamId,
     venue: pm.venue,
+    referee: pm.referee,
   };
 
   const existing = await prisma.match.findUnique({
@@ -211,6 +212,7 @@ async function upsertMatch(
     existing.homePlaceholder !== pm.homePlaceholder ||
     existing.awayPlaceholder !== pm.awayPlaceholder ||
     existing.venue !== pm.venue ||
+    existing.referee !== pm.referee ||
     existing.penaltyWinnerTeamId !== penaltyWinnerTeamId ||
     existing.advancingTeamId !== advancingTeamId;
 

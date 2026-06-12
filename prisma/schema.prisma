@@ -99,6 +99,7 @@ model Match {
 
   venue     String?
   city      String?
+  referee   String? // nome do árbitro principal, quando a API informar
   updatedAt DateTime @updatedAt
 
   homeTeam      Team? @relation("HomeTeam", fields: [homeTeamId], references: [id])

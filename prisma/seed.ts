@@ -112,6 +112,7 @@ async function main() {
       awayPenalties: m.penalties?.away ?? null,
       venue: m.venue,
       city: m.city,
+      referee: m.referee,
     };
 
     const existing = await prisma.match.findUnique({
