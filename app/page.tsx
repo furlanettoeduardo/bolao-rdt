@@ -1,6 +1,7 @@
 // Dashboard — visão geral do bolão: jogos de hoje/ao vivo, palpites
 // pendentes, palpite de campeão e top 5 do ranking.
 
+import Image from "next/image";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
@@ -46,6 +47,31 @@ export default async function DashboardPage() {
   return (
     <div className="space-y-8">
       <LiveRefresh />
+
+      {/* Emblema do grupo */}
+      <section aria-label="Nosso grupo">
+        <div className="flex items-center gap-4 rounded-xl border border-field-200 bg-gradient-to-r from-field-50 to-white p-4 shadow-sm">
+          <Image
+            src="/grupo.png"
+            alt="Emblema do grupo Recanto dos Tatuados"
+            width={88}
+            height={88}
+            priority
+            className="size-16 shrink-0 rounded-xl object-cover shadow-sm ring-1 ring-field-200 sm:size-20"
+          />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-wide text-field-700">
+              Nosso grupo
+            </p>
+            <h2 className="truncate text-lg font-bold text-slate-900 sm:text-xl">
+              Recanto dos Tatuados
+            </h2>
+            <p className="text-sm text-slate-500">
+              Bolão da Copa do Mundo FIFA 2026
+            </p>
+          </div>
+        </div>
+      </section>
 
       {/* Saudação */}
       <header>
