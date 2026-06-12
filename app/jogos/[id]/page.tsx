@@ -20,7 +20,11 @@ import { Card, CardBody, CardHeader } from "@/components/ui/card";
 import { EmptyState } from "@/components/ui/empty-state";
 import { cn } from "@/lib/cn";
 import { STAGE_LABELS } from "@/lib/format";
-import { isFinishedStatus, isKnockoutStage } from "@/lib/match-rules";
+import {
+  arePredictionsVisible,
+  isFinishedStatus,
+  isKnockoutStage,
+} from "@/lib/match-rules";
 import {
   getMatchById,
   getMatchParticipation,
@@ -73,6 +77,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
   if (!match) notFound();
 
   const locked = isMatchLocked(match);
+  const revealed = arePredictionsVisible(match);
   const myPredictions = await getUserPredictionsMap(userId);
   const myPrediction = myPredictions.get(match.id) ?? null;
   const advancingTeam = teamInMatch(match, match.advancingTeamId);
@@ -133,7 +138,7 @@ export default async function MatchDetailPage({ params }: PageProps) {
         </CardBody>
       </Card>
 
-      {locked ? (
+      {revealed ? (
         <LockedSections
           match={match}
           myPrediction={myPrediction}
@@ -141,7 +146,11 @@ export default async function MatchDetailPage({ params }: PageProps) {
           knockout={knockout}
         />
       ) : (
-        <OpenSections match={match} myPrediction={myPrediction} />
+        <OpenSections
+          match={match}
+          myPrediction={myPrediction}
+          locked={locked}
+        />
       )}
     </div>
   );
@@ -152,9 +161,11 @@ export default async function MatchDetailPage({ params }: PageProps) {
 async function OpenSections({
   match,
   myPrediction,
+  locked,
 }: {
   match: MatchDTO;
   myPrediction: PredictionDTO | null;
+  locked: boolean;
 }) {
   const participants = await getMatchParticipation(match.id);
 
@@ -167,7 +178,7 @@ async function OpenSections({
         >
           Seu palpite
         </h2>
-        <PredictionCard match={match} prediction={myPrediction} locked={false} />
+        <PredictionCard match={match} prediction={myPrediction} locked={locked} />
       </section>
 
       <Card>

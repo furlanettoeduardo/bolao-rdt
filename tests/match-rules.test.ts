@@ -71,6 +71,15 @@ describe("isMatchLocked — trava no kickoff (UTC)", () => {
     ).toBe(true);
   });
 
+  it("jogo cancelado fica travado mesmo com kickoff futuro", () => {
+    expect(
+      isMatchLocked(
+        { kickoff: KICKOFF, status: "CANCELLED" },
+        new Date("2026-06-01T00:00:00.000Z")
+      )
+    ).toBe(true);
+  });
+
   it("jogo adiado reabre quando o sync grava o novo horário futuro", () => {
     const newKickoff = new Date("2026-06-13T19:00:00.000Z");
     expect(
@@ -101,10 +110,57 @@ describe("arePredictionsVisible — anti-cópia", () => {
     ).toBe(false);
   });
 
-  it("palpites visíveis a partir do kickoff", () => {
+  it("palpites visíveis a partir do kickoff (jogo ao vivo)", () => {
     expect(
       arePredictionsVisible({ kickoff: KICKOFF, status: "IN_PLAY" }, KICKOFF)
     ).toBe(true);
+  });
+
+  it("palpites visíveis em jogo encerrado", () => {
+    expect(
+      arePredictionsVisible(
+        { kickoff: KICKOFF, status: "FINISHED" },
+        new Date("2026-06-12T00:00:00.000Z")
+      )
+    ).toBe(true);
+  });
+
+  it("SCHEDULED com kickoff no passado revela (bola rolando, sync atrasado)", () => {
+    expect(
+      arePredictionsVisible(
+        { kickoff: KICKOFF, status: "SCHEDULED" },
+        new Date("2026-06-11T19:05:00.000Z")
+      )
+    ).toBe(true);
+  });
+
+  // Anti-cópia: estados de limbo NÃO revelam, mesmo com kickoff no passado —
+  // senão, revelar e depois reabrir para edição permitiria copiar palpites.
+  it("jogo ADIADO não revela palpites mesmo com kickoff no passado", () => {
+    expect(
+      arePredictionsVisible(
+        { kickoff: KICKOFF, status: "POSTPONED" },
+        new Date("2026-06-11T19:05:00.000Z")
+      )
+    ).toBe(false);
+  });
+
+  it("jogo SUSPENSO antes do início não revela palpites", () => {
+    expect(
+      arePredictionsVisible(
+        { kickoff: KICKOFF, status: "SUSPENDED" },
+        new Date("2026-06-11T19:05:00.000Z")
+      )
+    ).toBe(false);
+  });
+
+  it("jogo CANCELADO não revela palpites", () => {
+    expect(
+      arePredictionsVisible(
+        { kickoff: KICKOFF, status: "CANCELLED" },
+        new Date("2026-06-11T19:05:00.000Z")
+      )
+    ).toBe(false);
   });
 });
 

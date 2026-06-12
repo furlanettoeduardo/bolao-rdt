@@ -6,7 +6,7 @@
 import type { Match, Prediction, Team } from "@prisma/client";
 import { prisma } from "./db";
 import { computeRanking, type RankingRow } from "./ranking";
-import { isLiveStatus, isMatchLocked } from "./match-rules";
+import { arePredictionsVisible, isLiveStatus, isMatchLocked } from "./match-rules";
 import { STAGE_ORDER } from "./format";
 import type { MatchDTO, Stage, TeamDTO } from "./types";
 
@@ -285,7 +285,7 @@ export async function getUserHistory(
   });
   const now = new Date();
   return predictions
-    .filter((p) => viewerIsOwner || isMatchLocked(p.match, now))
+    .filter((p) => viewerIsOwner || arePredictionsVisible(p.match, now))
     .map((p) => ({ match: toMatchDTO(p.match), prediction: toPredictionDTO(p) }));
 }
 
@@ -418,4 +418,4 @@ export async function listUsers() {
 }
 
 // Reexporta helpers usados junto com as queries nas páginas
-export { isMatchLocked, isLiveStatus };
+export { isMatchLocked, isLiveStatus, arePredictionsVisible };

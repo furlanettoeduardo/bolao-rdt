@@ -19,20 +19,33 @@ export function isLiveStatus(status: MatchStatus): boolean {
 
 /**
  * Palpite travado? Trava no kickoff (UTC) ou assim que o jogo sai de
- * "agendado". Jogos adiados ficam travados até o sync gravar o novo horário.
+ * "agendado". Jogos suspensos/cancelados ficam travados; adiados (POSTPONED)
+ * reabrem quando o sync grava o novo horário futuro.
  */
 export function isMatchLocked(match: MatchLike, now: Date = new Date()): boolean {
   if (isLiveStatus(match.status) || isFinishedStatus(match.status)) return true;
-  if (match.status === "SUSPENDED") return true;
+  if (match.status === "SUSPENDED" || match.status === "CANCELLED") return true;
   return new Date(match.kickoff).getTime() <= now.getTime();
 }
 
 /**
- * Palpites dos outros usuários só aparecem depois que o jogo trava
- * (anti-cópia). Antes disso, mostre apenas quem "já palpitou".
+ * Palpites dos outros usuários só aparecem depois que o jogo REALMENTE começou
+ * (anti-cópia). Diferente da trava de edição, a revelação nunca pode acontecer
+ * em estados de limbo (adiado/suspenso/cancelado): se revelasse e o jogo depois
+ * reabrisse para edição, daria pra copiar/contra-apostar os palpites já vistos.
+ * Antes da revelação, mostre apenas quem "já palpitou".
  */
 export function arePredictionsVisible(match: MatchLike, now: Date = new Date()): boolean {
-  return isMatchLocked(match, now);
+  if (isLiveStatus(match.status) || isFinishedStatus(match.status)) return true;
+  if (
+    match.status === "POSTPONED" ||
+    match.status === "SUSPENDED" ||
+    match.status === "CANCELLED"
+  ) {
+    return false;
+  }
+  // SCHEDULED com kickoff no passado = bola rolando, provedor ainda não atualizou.
+  return new Date(match.kickoff).getTime() <= now.getTime();
 }
 
 export function isKnockoutStage(stage: Stage): boolean {
