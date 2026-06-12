@@ -121,7 +121,10 @@ model Prediction {
   awayScore Int
   // Obrigatório no mata-mata quando o palpite é empate; caso contrário, inferido do placar
   advancingTeamId String?
-  points          Int? // null = ainda não pontuado
+  points          Int? // null = ainda não pontuado (cálculo automático)
+  // Pontos definidos manualmente pelo admin; quando != null, prevalece sobre
+  // `points` e NÃO é recalculado por syncs nem por edição de resultado.
+  pointsOverride  Int?
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 

@@ -5,6 +5,7 @@
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
 import { MatchEditor, type AdminMatch } from "@/components/admin/match-editor";
+import { PointsEditor } from "@/components/admin/points-editor";
 import { SyncPanel, type SyncLogDTO } from "@/components/admin/sync-panel";
 import { UsersTable, type AdminUser } from "@/components/admin/users-table";
 import { prisma } from "@/lib/db";
@@ -27,7 +28,11 @@ export default async function AdminPage() {
     getSyncLogs(20),
     listUsers(),
     prisma.match.findMany({
-      include: { homeTeam: true, awayTeam: true },
+      include: {
+        homeTeam: true,
+        awayTeam: true,
+        _count: { select: { predictions: true } },
+      },
       orderBy: { kickoff: "asc" },
     }),
   ]);
@@ -70,6 +75,7 @@ export default async function AdminPage() {
       homeTeamName: match.homeTeam?.name ?? null,
       awayTeamId: match.awayTeamId,
       awayTeamName: match.awayTeam?.name ?? null,
+      predictionCount: match._count.predictions,
     };
   });
 
@@ -87,6 +93,8 @@ export default async function AdminPage() {
         <SyncPanel logs={logs} />
         <MatchEditor matches={adminMatches} />
       </div>
+
+      <PointsEditor matches={adminMatches} />
 
       <UsersTable users={adminUsers} currentUserId={session.user.id} />
     </div>

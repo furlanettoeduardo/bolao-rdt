@@ -27,6 +27,7 @@ export interface AdminMatch {
   homeTeamName: string | null;
   awayTeamId: string | null;
   awayTeamName: string | null;
+  predictionCount: number;
 }
 
 const STATUS_OPTIONS = [

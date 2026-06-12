@@ -68,7 +68,8 @@ export function toPredictionDTO(p: Prediction): PredictionDTO {
     homeScore: p.homeScore,
     awayScore: p.awayScore,
     advancingTeamId: p.advancingTeamId,
-    points: p.points,
+    // Override manual do admin prevalece sobre o cálculo automático.
+    points: p.pointsOverride ?? p.points,
   };
 }
 
@@ -237,7 +238,7 @@ export async function getMatchPredictions(
     homeScore: p.homeScore,
     awayScore: p.awayScore,
     advancingTeamId: p.advancingTeamId,
-    points: p.points,
+    points: p.pointsOverride ?? p.points,
   }));
 }
 
@@ -279,7 +280,7 @@ export async function getCrowdPredictions(): Promise<CrowdMatch[]> {
           homeScore: p.homeScore,
           awayScore: p.awayScore,
           advancingTeamId: p.advancingTeamId,
-          points: p.points,
+          points: p.pointsOverride ?? p.points,
         }))
         .sort(
           (a, b) =>

@@ -26,7 +26,17 @@ async function requireAdmin(): Promise<string | null> {
 }
 
 function revalidateAll() {
-  for (const path of ["/", "/palpites", "/jogos", "/grupos", "/chaveamento", "/ranking", "/admin"]) {
+  for (const path of [
+    "/",
+    "/palpites",
+    "/jogos",
+    "/grupos",
+    "/chaveamento",
+    "/ranking",
+    "/galera",
+    "/perfil",
+    "/admin",
+  ]) {
     revalidatePath(path);
   }
 }
@@ -131,6 +141,91 @@ export async function updateMatchAction(
 
   revalidateAll();
   return { ok: true };
+}
+
+// ── Override manual de pontos por palpite ────────────────────────────────────
+
+export interface AdminPredictionRow {
+  predictionId: string;
+  userName: string;
+  homeScore: number;
+  awayScore: number;
+  /** Pontos calculados automaticamente (null = ainda não pontuado) */
+  autoPoints: number | null;
+  /** Override manual atual (null = usando o automático) */
+  override: number | null;
+}
+
+/** Lista os palpites de um jogo para o admin editar os pontos. */
+export async function adminListMatchPredictions(
+  matchId: string
+): Promise<ActionResult<AdminPredictionRow[]>> {
+  if (!(await requireAdmin())) return { ok: false, error: "Acesso negado." };
+
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    select: {
+      predictions: {
+        select: {
+          id: true,
+          homeScore: true,
+          awayScore: true,
+          points: true,
+          pointsOverride: true,
+          user: { select: { name: true } },
+        },
+        orderBy: { user: { name: "asc" } },
+      },
+    },
+  });
+  if (!match) return { ok: false, error: "Jogo não encontrado." };
+
+  const rows: AdminPredictionRow[] = match.predictions.map((p) => ({
+    predictionId: p.id,
+    userName: p.user.name,
+    homeScore: p.homeScore,
+    awayScore: p.awayScore,
+    autoPoints: p.points,
+    override: p.pointsOverride,
+  }));
+  return { ok: true, data: rows };
+}
+
+const pointsOverrideSchema = z.object({
+  predictionId: z.string().min(1),
+  // null = limpar o override (volta ao cálculo automático)
+  override: z.number().int().min(0).max(100).nullable(),
+});
+
+/**
+ * Define/limpa o override de pontos de vários palpites de uma vez. O valor fica
+ * fixo: rescoreMatch e o ranking passam a usá-lo no lugar do cálculo automático.
+ */
+export async function setPredictionPointsBatch(
+  updates: { predictionId: string; override: number | null }[]
+): Promise<ActionResult<{ updated: number }>> {
+  if (!(await requireAdmin())) return { ok: false, error: "Acesso negado." };
+
+  const parsed = z.array(pointsOverrideSchema).max(500).safeParse(updates);
+  if (!parsed.success) {
+    return {
+      ok: false,
+      error: "Valores de pontos inválidos (use inteiros de 0 a 100, ou vazio).",
+    };
+  }
+  if (parsed.data.length === 0) return { ok: true, data: { updated: 0 } };
+
+  await prisma.$transaction(
+    parsed.data.map((u) =>
+      prisma.prediction.update({
+        where: { id: u.predictionId },
+        data: { pointsOverride: u.override },
+      })
+    )
+  );
+
+  revalidateAll();
+  return { ok: true, data: { updated: parsed.data.length } };
 }
 
 export async function setUserRoleAction(

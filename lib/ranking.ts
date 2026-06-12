@@ -36,7 +36,7 @@ export async function computeRanking(stage?: Stage): Promise<RankingRow[]> {
     }),
     prisma.prediction.findMany({
       where: {
-        points: { not: null },
+        OR: [{ points: { not: null } }, { pointsOverride: { not: null } }],
         ...(stage ? { match: { stage } } : {}),
       },
       select: {
@@ -44,6 +44,7 @@ export async function computeRanking(stage?: Stage): Promise<RankingRow[]> {
         homeScore: true,
         awayScore: true,
         points: true,
+        pointsOverride: true,
         match: { select: { homeScore: true, awayScore: true } },
       },
     }),
@@ -67,16 +68,22 @@ export async function computeRanking(stage?: Stage): Promise<RankingRow[]> {
 
   for (const p of predictions) {
     const row = rows.get(p.userId);
-    if (!row || p.match.homeScore == null || p.match.awayScore == null) continue;
-    row.totalPoints += p.points ?? 0;
+    if (!row) continue;
+    // Pontos efetivos: override manual do admin prevalece sobre o automático.
+    const effective = p.pointsOverride ?? p.points;
+    if (effective == null) continue;
+    row.totalPoints += effective;
     row.scoredPredictions++;
-    const exact =
-      p.homeScore === p.match.homeScore && p.awayScore === p.match.awayScore;
-    const correctResult =
-      outcomeOf(p.homeScore, p.awayScore) ===
-      outcomeOf(p.match.homeScore, p.match.awayScore);
-    if (exact) row.exactCount++;
-    if (correctResult) row.resultCount++;
+    // Exatos/resultados (desempate) vêm sempre do placar real, não dos pontos.
+    if (p.match.homeScore != null && p.match.awayScore != null) {
+      const exact =
+        p.homeScore === p.match.homeScore && p.awayScore === p.match.awayScore;
+      const correctResult =
+        outcomeOf(p.homeScore, p.awayScore) ===
+        outcomeOf(p.match.homeScore, p.match.awayScore);
+      if (exact) row.exactCount++;
+      if (correctResult) row.resultCount++;
+    }
   }
 
   const sorted = [...rows.values()].sort(
