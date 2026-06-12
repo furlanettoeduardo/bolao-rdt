@@ -13,7 +13,6 @@ import {
   useRef,
   useState,
   useTransition,
-  type FocusEvent,
 } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -116,13 +115,6 @@ export function PredictionCard({
     });
   }, [valid, locked, isDirty, match.id, homeNum, awayNum, needsAdvancing, advancing]);
 
-  // Auto-save ao sair do bloco de placar/escolha (onBlur), quando o foco vai
-  // para fora do card. Salva apenas o que está válido e alterado.
-  function handleBlurSave(event: FocusEvent<HTMLDivElement>) {
-    if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
-    if (saveable) submit();
-  }
-
   // Registra o rascunho deste card no board para o botão "Salvar todos".
   // O ref é atualizado num effect (nunca durante o render) para o getter
   // registrado sempre devolver os valores do último commit.
@@ -208,7 +200,6 @@ export function PredictionCard({
         </span>
       </div>
 
-      <div onBlur={handleBlurSave}>
       <div className="mt-3 grid grid-cols-[1fr_auto_1fr] items-center gap-2">
         <TeamLabel team={match.homeTeam} placeholder={match.homePlaceholder} bold />
         <div className="flex items-center gap-1.5">
@@ -274,7 +265,6 @@ export function PredictionCard({
           </p>
         )
       ) : null}
-      </div>
 
       {!locked ? (
         <div className="mt-3 flex items-center justify-between gap-2">

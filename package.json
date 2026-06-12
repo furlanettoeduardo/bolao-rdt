@@ -5,7 +5,7 @@
   "description": "Bolão da Copa do Mundo FIFA 2026 — palpites, ranking e placares quase em tempo real",
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "prisma migrate deploy && next build",
     "start": "next start",
     "lint": "eslint .",
     "test": "vitest run",

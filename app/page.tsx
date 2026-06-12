@@ -1,5 +1,5 @@
 // Dashboard — visão geral do bolão: jogos de hoje/ao vivo, palpites
-// pendentes, palpite de campeão e top 5 do ranking.
+// pendentes, palpite de campeão e top 10 do ranking.
 
 import Link from "next/link";
 import { redirect } from "next/navigation";
@@ -41,14 +41,14 @@ export default async function DashboardPage() {
     predictions,
     pendingMatches,
     championPick,
-    topFive,
+    topTen,
     nextBrazil,
   ] = await Promise.all([
     getTodayAndLiveMatches(),
     getUserPredictionsMap(userId),
     getPendingMatches(userId, 6),
     getChampionPick(userId),
-    getRankingTop(5),
+    getRankingTop(10),
     getNextBrazilMatch(),
   ]);
 
@@ -220,11 +220,11 @@ export default async function DashboardPage() {
           </Card>
         </section>
 
-        {/* Top 5 do ranking */}
+        {/* Top 10 do ranking */}
         <section aria-labelledby="ranking-heading">
           <Card>
             <CardHeader
-              title={<span id="ranking-heading">Top 5 do ranking</span>}
+              title={<span id="ranking-heading">Top 10 do ranking</span>}
               action={
                 <Link
                   href="/ranking"
@@ -235,9 +235,9 @@ export default async function DashboardPage() {
               }
             />
             <CardBody className="px-2">
-              {topFive.length > 0 ? (
+              {topTen.length > 0 ? (
                 <ol className="space-y-0.5">
-                  {topFive.map((row) => {
+                  {topTen.map((row) => {
                     const medal = MEDALS[row.position - 1];
                     const isCurrentUser = row.userId === userId;
                     return (
