@@ -5,7 +5,7 @@
 import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
-import { auth } from "@/auth";
+import { auth, unstable_update } from "@/auth";
 import { prisma } from "@/lib/db";
 
 export interface ProfileFormState {
@@ -35,8 +35,13 @@ export async function updateNameAction(
     where: { id: session.user.id },
     data: { name: parsed.data },
   });
+  // Atualiza o nome gravado no JWT — sem isso, header e saudação mostrariam o
+  // nome antigo até o usuário relogar (a sessão é JWT, não consulta o banco).
+  await unstable_update({ user: { name: parsed.data } });
+  revalidatePath("/");
   revalidatePath("/perfil");
   revalidatePath("/ranking");
+  revalidatePath(`/usuarios/${session.user.id}`);
   return { success: "Nome atualizado." };
 }
 

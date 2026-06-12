@@ -41,10 +41,17 @@ export const authConfig = {
 
       return isLoggedIn;
     },
-    jwt({ token, user }) {
+    jwt({ token, user, trigger, session }) {
       if (user) {
         token.id = user.id as string;
         token.role = user.role;
+      }
+      // Disparado por unstable_update (ex.: troca de nome no perfil) — reflete o
+      // novo nome no token para o header/saudação sem exigir novo login.
+      if (trigger === "update" && session && typeof session === "object") {
+        const newName = (session as { user?: { name?: string | null } }).user
+          ?.name;
+        if (newName) token.name = newName;
       }
       return token;
     },
