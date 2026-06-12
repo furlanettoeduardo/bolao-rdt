@@ -197,6 +197,9 @@ async function upsertMatch(
   const changed =
     existing.status !== pm.status ||
     existing.kickoff.getTime() !== new Date(pm.kickoffUtc).getTime() ||
+    existing.stage !== pm.stage ||
+    existing.group !== pm.group ||
+    existing.matchday !== pm.matchday ||
     existing.homeScore !== (pm.regulation?.home ?? null) ||
     existing.awayScore !== (pm.regulation?.away ?? null) ||
     existing.homeScoreET !== (pm.afterExtraTime?.home ?? null) ||
@@ -205,6 +208,10 @@ async function upsertMatch(
     existing.awayPenalties !== (pm.penalties?.away ?? null) ||
     existing.homeTeamId !== homeTeamId ||
     existing.awayTeamId !== awayTeamId ||
+    existing.homePlaceholder !== pm.homePlaceholder ||
+    existing.awayPlaceholder !== pm.awayPlaceholder ||
+    existing.venue !== pm.venue ||
+    existing.penaltyWinnerTeamId !== penaltyWinnerTeamId ||
     existing.advancingTeamId !== advancingTeamId;
 
   if (changed) {
@@ -213,6 +220,8 @@ async function upsertMatch(
 
   // Pontua sempre que o jogo está finalizado e algo mudou, ou se há palpites
   // ainda sem pontos (idempotente — recomputar dá o mesmo resultado).
+  // Também repontua quando o jogo DEIXA de estar finalizado (provedor reverteu
+  // FINISHED → IN_PLAY etc.): rescoreMatch zera os pontos nesse caso.
   let needsScoring = false;
   if (finished) {
     if (changed || !isFinishedStatus(existing.status)) {
@@ -223,6 +232,8 @@ async function upsertMatch(
       });
       needsScoring = unscored > 0;
     }
+  } else if (changed && isFinishedStatus(existing.status)) {
+    needsScoring = true;
   }
 
   return { matchId: existing.id, changed, needsScoring };
@@ -239,8 +250,20 @@ export async function rescoreMatch(matchId: string): Promise<number> {
     include: { predictions: true },
   });
   if (!match) return 0;
-  if (!isFinishedStatus(match.status)) return 0;
-  if (match.homeScore == null || match.awayScore == null) return 0;
+
+  // Jogo não está mais finalizado (ou sem placar): zera os pontos de volta para
+  // null, para não deixar pontuação fantasma contando no ranking. Idempotente.
+  if (
+    !isFinishedStatus(match.status) ||
+    match.homeScore == null ||
+    match.awayScore == null
+  ) {
+    const { count } = await prisma.prediction.updateMany({
+      where: { matchId, points: { not: null } },
+      data: { points: null },
+    });
+    return count;
+  }
 
   const result = { homeScore: match.homeScore, awayScore: match.awayScore };
   const knockout = isKnockoutStage(match.stage)
@@ -275,6 +298,12 @@ export async function creditChampionIfFinalFinished(): Promise<void> {
     orderBy: { kickoff: "desc" },
   });
   if (!final || !isFinishedStatus(final.status) || !final.advancingTeamId) {
+    // Final ainda não decidida (ou des-finalizada): garante que nenhum bônus
+    // de campeão fique pendurado. Idempotente.
+    await prisma.championPick.updateMany({
+      where: { points: { not: null } },
+      data: { points: null },
+    });
     return;
   }
   await prisma.championPick.updateMany({
