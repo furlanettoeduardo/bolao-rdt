@@ -70,6 +70,9 @@ export function UserMenu({
           <Link href="/perfil" role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
             Meu perfil
           </Link>
+          <Link href="/galera" role="menuitem" className={itemClass} onClick={() => setOpen(false)}>
+            Palpites da galera
+          </Link>
           <Link href="/chaveamento" role="menuitem" className={cn(itemClass, "md:hidden")} onClick={() => setOpen(false)}>
             Chaveamento
           </Link>

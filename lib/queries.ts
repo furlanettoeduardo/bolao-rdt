@@ -241,6 +241,54 @@ export async function getMatchPredictions(
   }));
 }
 
+export interface CrowdMatch {
+  match: MatchDTO;
+  predictions: MatchPredictionRow[];
+}
+
+/**
+ * Palpites de todos os participantes agrupados por jogo, APENAS para jogos já
+ * revelados (que começaram) — preserva o anti-cópia. Ordena por jogo mais
+ * recente; dentro de cada jogo, maior pontuação primeiro.
+ */
+export async function getCrowdPredictions(): Promise<CrowdMatch[]> {
+  const now = new Date();
+  const matches = await prisma.match.findMany({
+    where: {
+      OR: [
+        { status: { in: ["IN_PLAY", "PAUSED", "FINISHED", "AWARDED"] } },
+        { status: "SCHEDULED", kickoff: { lte: now } },
+      ],
+    },
+    include: {
+      homeTeam: true,
+      awayTeam: true,
+      predictions: { include: { user: { select: { id: true, name: true } } } },
+    },
+    orderBy: { kickoff: "desc" },
+  });
+
+  return matches
+    .filter((m) => m.predictions.length > 0)
+    .map((m) => ({
+      match: toMatchDTO(m),
+      predictions: m.predictions
+        .map((p) => ({
+          userId: p.user.id,
+          userName: p.user.name,
+          homeScore: p.homeScore,
+          awayScore: p.awayScore,
+          advancingTeamId: p.advancingTeamId,
+          points: p.points,
+        }))
+        .sort(
+          (a, b) =>
+            (b.points ?? -1) - (a.points ?? -1) ||
+            a.userName.localeCompare(b.userName)
+        ),
+    }));
+}
+
 export interface ParticipantStatus {
   userId: string;
   userName: string;
