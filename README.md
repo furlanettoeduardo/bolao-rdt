@@ -83,8 +83,8 @@ cp .env.example .env
 
 | Variável | Obrigatória | Descrição |
 | --- | :---: | --- |
-| `DATABASE_URL` | Sim | Connection string do Postgres **com pooling** (no Neon, a URL com sufixo `-pooler` e `pgbouncer=true`). Usada pelo app em runtime. |
-| `DIRECT_URL` | Sim | Connection string **direta** (sem pooler) — usada apenas por `prisma migrate`. Em dev local pode ser igual à `DATABASE_URL`. |
+| `POSTGRES_PRISMA_URL` | Sim | Connection string do Postgres **com pooling**, no formato do Prisma (`pgbouncer=true`). Usada pelo app em runtime. Na integração Neon ↔ Vercel é criada automaticamente. |
+| `DATABASE_URL_UNPOOLED` | Sim | Connection string **direta** (sem pooler) — usada apenas por `prisma migrate`. Em dev local pode ser igual à `POSTGRES_PRISMA_URL`. Criada automaticamente pela integração Neon ↔ Vercel. |
 | `AUTH_SECRET` | Sim | Segredo de sessão do Auth.js. Gere com `npx auth secret` (ou `openssl rand -base64 32`). |
 | `FOOTBALL_DATA_TOKEN` | Sim | Token gratuito da Football-Data.org (veja abaixo). |
 | `CRON_SECRET` | Sim | Segredo que protege o endpoint `/api/cron/sync` (header `Authorization: Bearer <CRON_SECRET>`). |
@@ -123,19 +123,20 @@ npm run test:watch
 ## Deploy na Vercel
 
 1. **Importe o repositório** na Vercel (plano Hobby funciona).
-2. **Crie o Postgres Neon** pela aba **Storage / Marketplace** do projeto na Vercel. A integração nativa preenche `DATABASE_URL` (já com pooler) automaticamente. Crie manualmente a env `DIRECT_URL` com a mesma connection string **sem** o sufixo `-pooler` (disponível no painel do Neon).
+2. **Crie o Postgres Neon** pela aba **Storage** do projeto na Vercel (Create Database → Neon, plano Free). A integração nativa cria **automaticamente** `POSTGRES_PRISMA_URL` (com pooler) e `DATABASE_URL_UNPOOLED` (direta) — **não precisa adicionar nada manual** para o banco.
 3. **Configure as demais variáveis** de ambiente: `AUTH_SECRET`, `FOOTBALL_DATA_TOKEN`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL` (e, se quiser, `REGISTRATION_CODE` e `ADMIN_EMAIL`).
-4. **Faça o deploy.** O script `postinstall` roda `prisma generate` automaticamente.
-5. **Rode as migrações** de uma das formas:
-   - Localmente, apontando para o banco de produção:
+4. **Faça o deploy.** O script `postinstall` roda `prisma generate` automaticamente (o build não precisa do banco).
+5. **Rode as migrações e o seed** apontando para o banco de produção. O jeito mais simples, com a [CLI da Vercel](https://vercel.com/docs/cli), puxa as envs de produção para um arquivo local:
 
-     ```bash
-     DATABASE_URL="<url-producao>" DIRECT_URL="<url-direta-producao>" npx prisma migrate deploy
-     ```
+   ```bash
+   npx vercel link            # vincula a pasta ao projeto na Vercel
+   npx vercel env pull .env   # baixa POSTGRES_PRISMA_URL, DATABASE_URL_UNPOOLED, FOOTBALL_DATA_TOKEN…
+   npx prisma migrate deploy  # cria as tabelas
+   npm run seed               # importa as 48 seleções e os 104 jogos reais
+   ```
 
-   - Ou configure o **Build Command** na Vercel como `prisma migrate deploy && next build` (as migrações rodam a cada deploy).
-6. **Rode o seed** apontando para o banco de produção (mesmo esquema de envs do passo anterior, com `npm run seed`).
-7. O primeiro usuário cadastrado com o e-mail de `ADMIN_EMAIL` vira admin automaticamente.
+   Alternativa: configure o **Build Command** na Vercel como `prisma migrate deploy && next build` (as migrações rodam a cada deploy) e rode só o seed pelo método acima.
+6. O primeiro usuário cadastrado com o e-mail de `ADMIN_EMAIL` vira admin automaticamente.
 
 ## Sincronização de placares
 
@@ -198,7 +199,7 @@ bolao-rdt/
 | Problema | Causa / solução |
 | --- | --- |
 | **HTTP 429 da Football-Data** | Limite do free tier (10 req/min) atingido. Aguarde 1 minuto e tente de novo — o sync normal nunca chega perto do limite. |
-| **Prisma `P1001` (can't reach database)** | Verifique a `DATABASE_URL`: use a URL **com pooler** do Neon e mantenha `sslmode=require`. Confirme que o projeto Neon não está suspenso. |
+| **Prisma `P1001` (can't reach database)** | Verifique a `POSTGRES_PRISMA_URL`: use a URL **com pooler** do Neon e mantenha `sslmode=require`. Confirme que o projeto Neon não está suspenso. |
 | **"FOOTBALL_DATA_TOKEN não definido"** | A env não foi configurada (no `.env` local ou nas variáveis da Vercel). Sem ela a sincronização não roda — o resto do app funciona. |
 | **Seed mostra "1º do Grupo A" etc.** | Normal: antes do sorteio/definição dos confrontos a API retorna placeholders. Rode um sync `full` depois que os times forem definidos. |
 | **Horários "errados"** | Tudo é gravado em **UTC** e exibido no fuso do navegador (padrão `America/Sao_Paulo`). O servidor nunca formata datas no fuso local. |

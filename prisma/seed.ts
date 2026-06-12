@@ -5,7 +5,7 @@
 // Idempotente — pode rodar quantas vezes quiser (upsert por externalId).
 //
 // Uso: npm run seed
-// Requer: DATABASE_URL e FOOTBALL_DATA_TOKEN no .env
+// Requer no .env: POSTGRES_PRISMA_URL, DATABASE_URL_UNPOOLED e FOOTBALL_DATA_TOKEN
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { PrismaClient } from "@prisma/client";
