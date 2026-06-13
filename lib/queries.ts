@@ -512,9 +512,40 @@ export async function getRanking(stage?: Stage): Promise<RankingRow[]> {
   return computeRanking(stage);
 }
 
-export async function getRankingTop(n: number): Promise<RankingRow[]> {
+/** Resumo do usuário no ranking geral, para o card de status na home. */
+export interface UserRankingStats {
+  position: number;
+  totalParticipants: number;
+  totalPoints: number;
+  exactCount: number;
+}
+
+export interface RankingOverview {
+  top: RankingRow[];
+  user: UserRankingStats | null;
+}
+
+/**
+ * Calcula o ranking geral uma única vez e devolve o top N junto com a posição
+ * do próprio usuário (que pode estar fora do top N).
+ */
+export async function getRankingOverview(
+  userId: string,
+  topN: number
+): Promise<RankingOverview> {
   const ranking = await computeRanking();
-  return ranking.slice(0, n);
+  const row = ranking.find((r) => r.userId === userId);
+  return {
+    top: ranking.slice(0, topN),
+    user: row
+      ? {
+          position: row.position,
+          totalParticipants: ranking.length,
+          totalPoints: row.totalPoints,
+          exactCount: row.exactCount,
+        }
+      : null,
+  };
 }
 
 // ── Admin ────────────────────────────────────────────────────────────────────

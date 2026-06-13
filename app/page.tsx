@@ -20,7 +20,7 @@ import {
   getChampionPick,
   getNextBrazilMatch,
   getPendingMatches,
-  getRankingTop,
+  getRankingOverview,
   getTodayAndLiveMatches,
   getUserPredictionsMap,
 } from "@/lib/queries";
@@ -41,16 +41,19 @@ export default async function DashboardPage() {
     predictions,
     pendingMatches,
     championPick,
-    topTen,
+    ranking,
     nextBrazil,
   ] = await Promise.all([
     getTodayAndLiveMatches(),
     getUserPredictionsMap(userId),
     getPendingMatches(userId, 6),
     getChampionPick(userId),
-    getRankingTop(10),
+    getRankingOverview(userId, 10),
     getNextBrazilMatch(),
   ]);
+
+  const topTen = ranking.top;
+  const userStats = ranking.user;
 
   return (
     <div className="space-y-8">
@@ -121,14 +124,43 @@ export default async function DashboardPage() {
         </section>
       ) : null}
 
-      {/* Saudação */}
-      <header>
-        <h1 className="text-2xl font-bold text-slate-900">
-          Olá, {firstName}
-        </h1>
-        <p className="mt-1 text-sm text-slate-500">
-          <LocalTime iso={new Date().toISOString()} mode="day-heading" />
-        </p>
+      {/* Saudação + status do usuário */}
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">
+            Olá, {firstName}
+          </h1>
+          <p className="mt-1 text-sm text-slate-500">
+            <LocalTime iso={new Date().toISOString()} mode="day-heading" />
+          </p>
+        </div>
+
+        {userStats ? (
+          <Link
+            href="/ranking"
+            className="flex shrink-0 items-stretch divide-x divide-slate-200 self-start overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm transition-colors hover:border-field-300 sm:self-auto"
+          >
+            <div className="px-4 py-2.5 text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Pontos
+              </p>
+              <p className="mt-0.5 text-xl font-bold tabular-nums text-field-700">
+                {userStats.totalPoints}
+              </p>
+            </div>
+            <div className="px-4 py-2.5 text-center">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                Posição
+              </p>
+              <p className="mt-0.5 text-xl font-bold tabular-nums text-slate-900">
+                {userStats.position}º
+                <span className="ml-0.5 text-sm font-medium text-slate-400">
+                  /{userStats.totalParticipants}
+                </span>
+              </p>
+            </div>
+          </Link>
+        ) : null}
       </header>
 
       {/* Hoje e ao vivo */}
@@ -170,8 +202,8 @@ export default async function DashboardPage() {
 
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Palpites pendentes */}
-        <section aria-labelledby="pendentes-heading">
-          <Card>
+        <section aria-labelledby="pendentes-heading" className="h-full">
+          <Card className="h-full">
             <CardHeader
               title={<span id="pendentes-heading">Palpites pendentes</span>}
               subtitle="Próximos jogos abertos sem palpite seu"
@@ -228,8 +260,8 @@ export default async function DashboardPage() {
         </section>
 
         {/* Top 10 do ranking */}
-        <section aria-labelledby="ranking-heading">
-          <Card>
+        <section aria-labelledby="ranking-heading" className="h-full">
+          <Card className="h-full">
             <CardHeader
               title={<span id="ranking-heading">Top 10 do ranking</span>}
               action={
