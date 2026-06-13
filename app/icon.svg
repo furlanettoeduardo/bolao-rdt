@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Bola de futebol">
+  <rect width="32" height="32" rx="7" fill="#133f30" />
+  <circle cx="16" cy="16" r="11" fill="#ffffff" />
+  <g stroke="#0f172a" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" fill="none">
+    <line x1="16" y1="11.8" x2="16" y2="5.8" />
+    <line x1="19.99" y1="14.7" x2="25.7" y2="12.85" />
+    <line x1="18.47" y1="19.4" x2="21.99" y2="24.25" />
+    <line x1="13.53" y1="19.4" x2="10.01" y2="24.25" />
+    <line x1="12.01" y1="14.7" x2="6.3" y2="12.85" />
+  </g>
+  <polygon points="16,11.8 19.99,14.7 18.47,19.4 13.53,19.4 12.01,14.7" fill="#0f172a" />
+</svg>

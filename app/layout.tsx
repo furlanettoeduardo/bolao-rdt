@@ -33,9 +33,32 @@ export default async function RootLayout({
         <Header />
         <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-6 pb-24 md:pb-10">
           {children}
+          {/* Crédito no mobile — o footer abaixo é só desktop (md:block) */}
+          <p className="mt-8 text-center text-xs text-slate-400 md:hidden">
+            Feito por{" "}
+            <a
+              href="https://www.instagram.com/furlanetto_eduardo/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-field-700 hover:text-field-800 hover:underline"
+            >
+              Eduardo Furlanetto Nunes
+            </a>
+          </p>
         </main>
         <footer className="hidden border-t border-slate-200 bg-white py-4 text-center text-xs text-slate-400 md:block">
-          {APP_NAME} · Copa do Mundo FIFA 2026 · dados via Football-Data.org
+          <p>{APP_NAME} · Copa do Mundo FIFA 2026 · dados via Football-Data.org</p>
+          <p className="mt-1">
+            Feito por{" "}
+            <a
+              href="https://www.instagram.com/furlanetto_eduardo/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="font-medium text-field-700 hover:text-field-800 hover:underline"
+            >
+              Eduardo Furlanetto Nunes
+            </a>
+          </p>
         </footer>
         {session?.user ? <MobileNav /> : null}
       </body>
