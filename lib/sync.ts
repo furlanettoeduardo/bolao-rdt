@@ -106,8 +106,42 @@ export async function runSync(scope: SyncScope): Promise<SyncResult> {
 
     await creditChampionIfFinalFinished();
 
+    // Diagnóstico de latência: o que a API retornou para os jogos ao vivo, e se
+    // algum jogo já passou do horário mas a API ainda o reporta como agendado
+    // (sinal de que o atraso está no provedor, não no nosso pipeline/cron).
+    const nowMs = Date.now();
+    const liveProvider = providerMatches.filter(
+      (m) => m.status === "IN_PLAY" || m.status === "PAUSED"
+    );
+    const startedButScheduled = providerMatches.filter(
+      (m) =>
+        m.status === "SCHEDULED" &&
+        new Date(m.kickoffUtc).getTime() <= nowMs &&
+        // janela de 4h para ignorar jogos antigos sem placar
+        new Date(m.kickoffUtc).getTime() >= nowMs - 4 * 60 * 60 * 1000
+    );
+    const liveInfo = liveProvider
+      .map(
+        (m) =>
+          `#${m.externalId} ${m.regulation?.home ?? "-"}x${m.regulation?.away ?? "-"} ${m.status}`
+      )
+      .join(", ");
+    console.log(
+      `[sync] provider: ${providerMatches.length} jogos; ao vivo: ${liveProvider.length}` +
+        (liveInfo ? ` (${liveInfo})` : "") +
+        `; passaram do horário mas "agendado" p/ API: ${startedButScheduled.length}` +
+        (startedButScheduled.length
+          ? ` (${startedButScheduled.map((m) => `#${m.externalId}`).join(", ")})`
+          : "")
+    );
+
     const durationMs = Date.now() - startedAt;
-    const message = `${matchesUpdated} jogo(s) atualizado(s), ${matchesScored} pontuado(s), ${standingsUpdated} linha(s) de classificação.`;
+    const message =
+      `${matchesUpdated} jogo(s) atualizado(s), ${matchesScored} pontuado(s), ${standingsUpdated} linha(s) de classificação. ` +
+      `Ao vivo p/ API: ${liveProvider.length}${liveInfo ? ` (${liveInfo})` : ""}.` +
+      (startedButScheduled.length > 0
+        ? ` ⚠ ${startedButScheduled.length} jogo(s) já no horário mas a API ainda diz "agendado" — atraso do provedor.`
+        : "");
     await prisma.syncLog.create({
       data: { ok: true, scope, message, durationMs },
     });

@@ -125,17 +125,21 @@ npm run test:watch
 1. **Importe o repositório** na Vercel (plano Hobby funciona).
 2. **Crie o Postgres Neon** pela aba **Storage** do projeto na Vercel (Create Database → Neon, plano Free). A integração nativa cria **automaticamente** `POSTGRES_PRISMA_URL` (com pooler) e `DATABASE_URL_UNPOOLED` (direta) — **não precisa adicionar nada manual** para o banco.
 3. **Configure as demais variáveis** de ambiente: `AUTH_SECRET`, `FOOTBALL_DATA_TOKEN`, `CRON_SECRET`, `NEXT_PUBLIC_APP_URL` (e, se quiser, `REGISTRATION_CODE` e `ADMIN_EMAIL`).
-4. **Faça o deploy.** O script `postinstall` roda `prisma generate` automaticamente (o build não precisa do banco).
-5. **Rode as migrações e o seed** apontando para o banco de produção. O jeito mais simples, com a [CLI da Vercel](https://vercel.com/docs/cli), puxa as envs de produção para um arquivo local:
+4. **Faça o deploy.** O script `postinstall` roda `prisma generate` e o **build já roda
+   `prisma migrate deploy && next build`** (ver `package.json`) — ou seja, **as migrações são
+   aplicadas automaticamente a cada deploy**.
+5. **Rode o seed** apontando para o banco de produção (o build já cuida das migrações). Com a
+   [CLI da Vercel](https://vercel.com/docs/cli), puxe as envs de produção para um arquivo local:
 
    ```bash
    npx vercel link            # vincula a pasta ao projeto na Vercel
    npx vercel env pull .env   # baixa POSTGRES_PRISMA_URL, DATABASE_URL_UNPOOLED, FOOTBALL_DATA_TOKEN…
-   npx prisma migrate deploy  # cria as tabelas
+   npx prisma migrate deploy  # (opcional — o build já faz isso) cria/atualiza as tabelas
    npm run seed               # importa as 48 seleções e os 104 jogos reais
    ```
 
-   Alternativa: configure o **Build Command** na Vercel como `prisma migrate deploy && next build` (as migrações rodam a cada deploy) e rode só o seed pelo método acima.
+   > **Atenção:** como esse `.env` aponta para **produção**, rodar `npm run build` localmente
+   > aplica migrações na produção. Para validar o build sem tocar no banco, use `npx next build`.
 6. O primeiro usuário cadastrado com o e-mail de `ADMIN_EMAIL` vira admin automaticamente.
 
 ## Sincronização de placares
@@ -152,17 +156,24 @@ curl -X POST "https://SEU-APP.vercel.app/api/cron/sync?scope=window" \
 | `?scope=window` (padrão) | Sincroniza a janela "ontem → amanhã" — barato e rápido, ideal para rodar a cada poucos minutos |
 | `?scope=full` | Sincroniza **todos** os jogos do torneio — usado como passada de segurança diária |
 
-Três mecanismos trabalham juntos:
+Mecanismos em uso:
 
-1. **Cron nativo da Vercel** ([`vercel.json`](vercel.json)) — o plano Hobby só permite crons **diários**, então ele roda um `scope=full` de segurança todo dia às 06:00 UTC. A Vercel envia o `Bearer CRON_SECRET` automaticamente quando a env existe.
-2. **GitHub Actions** ([`.github/workflows/sync.yml`](.github/workflows/sync.yml)) — roda a cada **5 minutos** com `scope=window`, para placares quase em tempo real. Configure nos *Secrets* do repositório (Settings → Secrets and variables → Actions):
-   - `APP_URL` → URL pública do app, sem barra final
-   - `CRON_SECRET` → o mesmo valor da env na Vercel
+1. **[cron-job.org](https://cron-job.org/) (principal)** — agende um `POST` para
+   `https://SEU-APP/api/cron/sync?scope=window` com o header `Authorization: Bearer <CRON_SECRET>`,
+   **a cada 1 minuto**. É o que roda os placares quase em tempo real (pontual e confiável).
+2. **Cron nativo da Vercel** ([`vercel.json`](vercel.json)) — o plano Hobby só permite crons
+   **diários**, então roda um `scope=full` de segurança todo dia às 06:00 UTC. A Vercel envia o
+   `Bearer CRON_SECRET` automaticamente.
+3. **GitHub Actions** ([`.github/workflows/sync.yml`](.github/workflows/sync.yml)) — alternativa
+   *opcional* a cada 5 min (não é o mecanismo ativo; o GitHub não garante pontualidade).
 
-   Observação: o GitHub Actions não garante pontualidade — em horários de pico pode atrasar alguns minutos.
-3. **Alternativa: [cron-job.org](https://cron-job.org/)** (ou similar) — agende um `POST` para `https://SEU-APP/api/cron/sync?scope=window` com o header `Authorization: Bearer <CRON_SECRET>`. Mais pontual que o Actions.
+> **Latência de placar ao vivo:** mesmo com o cron de 1 min pontual, o placar pode demorar alguns
+> minutos para refletir o jogo real. O atraso é do **free tier da Football-Data.org** (não é tempo
+> real), não do pipeline. Cada `SyncLog` agora registra quantos jogos a API reporta ao vivo e
+> sinaliza quando um jogo **já passou do horário mas a API ainda diz "agendado"** — use isso (e os
+> logs de runtime da Vercel, prefixo `[football-data]`/`[sync]`) para confirmar a origem do atraso.
 
-Se a API externa falhar, o painel **`/admin`** permite disparar a sincronização manualmente e **editar resultados na mão** — a repontuação dos palpites acontece automaticamente. Cada execução fica registrada na tabela `SyncLog`.
+Se a API externa falhar, o painel **`/admin`** permite disparar a sincronização manualmente, **editar resultados na mão** (a repontuação é automática) e **ajustar pontos por usuário** (bônus/penalidade com histórico). Cada execução fica registrada na tabela `SyncLog`.
 
 ## Estrutura de pastas
 
@@ -189,7 +200,7 @@ bolao-rdt/
 │   ├── queries.ts        # Todas as consultas de leitura (Prisma)
 │   └── sync.ts           # Orquestração da sincronização
 └── prisma/
-    ├── schema.prisma     # User, Team, Match, Prediction, ChampionPick, GroupStanding, SyncLog
+    ├── schema.prisma     # User, Team, Match, Prediction, ChampionPick, MatchGoal, GroupStanding, SyncLog, PointAdjustment
     ├── migrations/       # Migrações versionadas
     └── seed.ts           # Importa as 48 seleções e os 104 jogos reais
 ```
@@ -199,6 +210,7 @@ bolao-rdt/
 | Problema | Causa / solução |
 | --- | --- |
 | **HTTP 429 da Football-Data** | Limite do free tier (10 req/min) atingido. Aguarde 1 minuto e tente de novo — o sync normal nunca chega perto do limite. |
+| **Placar ao vivo demora a atualizar** | O free tier da Football-Data **não é tempo real** — pode atrasar minutos. Confirme no `/admin` (mensagem do `SyncLog`: "Ao vivo p/ API" e o aviso de jogo "já no horário mas a API ainda diz agendado") ou nos logs de runtime da Vercel (`[sync]`/`[football-data]`). Se o cron e o pipeline estão ok, o atraso é do provedor. |
 | **Prisma `P1001` (can't reach database)** | Verifique a `POSTGRES_PRISMA_URL`: use a URL **com pooler** do Neon e mantenha `sslmode=require`. Confirme que o projeto Neon não está suspenso. |
 | **"FOOTBALL_DATA_TOKEN não definido"** | A env não foi configurada (no `.env` local ou nas variáveis da Vercel). Sem ela a sincronização não roda — o resto do app funciona. |
 | **Seed mostra "1º do Grupo A" etc.** | Normal: antes do sorteio/definição dos confrontos a API retorna placeholders. Rode um sync `full` depois que os times forem definidos. |

@@ -155,11 +155,17 @@ export class FootballDataProvider implements FootballProvider {
   constructor(private readonly token: string) {}
 
   private async request<T>(path: string): Promise<T> {
+    const startedAt = Date.now();
     const res = await fetch(`${BASE_URL}${path}`, {
       headers: { "X-Auth-Token": this.token },
       // Sempre dados frescos — o cache fica no nosso banco, não aqui.
       cache: "no-store",
     });
+    // Log de diagnóstico (aparece nos logs de runtime da Vercel). O token vai no
+    // header, então o path é seguro de logar.
+    console.log(
+      `[football-data] GET ${path} → ${res.status} em ${Date.now() - startedAt}ms`
+    );
     if (res.status === 429) {
       throw new Error(
         "Football-Data.org: limite de requisições atingido (10/min no plano gratuito). Tente novamente em instantes."

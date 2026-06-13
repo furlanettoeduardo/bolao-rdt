@@ -177,10 +177,7 @@ function GoalsCard({
 }) {
   return (
     <Card>
-      <CardHeader
-        title="Gols"
-        subtitle="Minutos estimados pelo sistema — o autor não está disponível no plano gratuito"
-      />
+      <CardHeader title="Gols" />
       <CardBody className="p-0">
         <ul className="divide-y divide-slate-100">
           {goals.map((g, i) => {
