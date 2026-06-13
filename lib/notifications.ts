@@ -6,7 +6,9 @@
 //
 // Tipos: match_soon | match_finished | prediction_result | goal | ranking | champion
 // Escopo de gols/encerramento: jogos que o usuário palpitou + jogos do Brasil.
-// "Jogo começando" (~1h antes) vale para QUALQUER jogo, não só o do Brasil.
+// "Jogo começando" (match_soon, ~1h antes) vale para qualquer jogo e para TODOS:
+// quem palpitou recebe um aviso de que vai começar; quem não palpitou, um
+// lembrete de última chance (mesma notificação, texto diferente).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { SCORING } from "./config";
@@ -71,7 +73,8 @@ async function safe(p: Promise<void>): Promise<void> {
   }
 }
 
-// ── Jogo começando (~1h antes do kickoff) — qualquer jogo ────────────────────
+// ── Jogo começando (~1h antes do kickoff) ────────────────────────────────────
+// Notifica todos: aviso para quem palpitou; lembrete para quem não palpitou.
 
 async function notifyUpcomingMatches(): Promise<void> {
   const now = Date.now();
@@ -80,7 +83,11 @@ async function notifyUpcomingMatches(): Promise<void> {
       status: "SCHEDULED",
       kickoff: { gt: new Date(now), lte: new Date(now + 60 * 60 * 1000) },
     },
-    include: { homeTeam: true, awayTeam: true },
+    include: {
+      homeTeam: true,
+      awayTeam: true,
+      predictions: { select: { userId: true } },
+    },
     orderBy: { kickoff: "asc" },
   });
   if (upcoming.length === 0) return;
@@ -92,16 +99,28 @@ async function notifyUpcomingMatches(): Promise<void> {
 
   const notifs: NotifInput[] = [];
   for (const m of upcoming) {
+    const predicted = new Set(m.predictions.map((p) => p.userId));
     const home = label(m.homeTeam, m.homePlaceholder);
     const away = label(m.awayTeam, m.awayPlaceholder);
     const isBrazil =
       brazil != null &&
       (m.homeTeamId === brazil.id || m.awayTeamId === brazil.id);
-    const title = isBrazil
-      ? "⏰ Falta 1h para o Brasil!"
-      : "⏰ Jogo começando em breve";
-    const body = `${home} x ${away} começa em breve — confira seu palpite.`;
+
     for (const u of users) {
+      const hasPredicted = predicted.has(u.id);
+      // Quem palpitou: aviso de que o jogo vai começar.
+      // Quem não palpitou: lembrete de última chance.
+      const title = isBrazil
+        ? hasPredicted
+          ? "⏰ Falta 1h para o Brasil!"
+          : "⏰ Falta 1h para o Brasil — palpite!"
+        : hasPredicted
+          ? "⏰ Seu jogo vai começar!"
+          : "⏰ Última chance de palpitar";
+      const body = hasPredicted
+        ? `${home} x ${away} começa em ~1h. Seu palpite está valendo — bora torcer!`
+        : `${home} x ${away} começa em ~1h e você ainda não palpitou. Garanta seu palpite!`;
+
       notifs.push({
         userId: u.id,
         key: `upcoming:${m.id}`,
