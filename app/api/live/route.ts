@@ -25,8 +25,19 @@ export async function GET() {
     prisma.match.count({ where: { status: { in: ["IN_PLAY", "PAUSED"] } } }),
   ]);
 
-  return NextResponse.json({
-    stamp: `${agg._count}-${agg._max.updatedAt?.toISOString() ?? "none"}`,
-    liveCount,
-  });
+  return NextResponse.json(
+    {
+      stamp: `${agg._count}-${agg._max.updatedAt?.toISOString() ?? "none"}`,
+      liveCount,
+    },
+    {
+      // Endpoint público sem sessão: a CDN da Vercel serve a mesma resposta a
+      // todos por 15s, colapsando milhares de req/s (e qualquer abuso anônimo)
+      // em ~1 hit de origem por janela. O polling do cliente é de 45s, então o
+      // atraso ao vivo é no máximo ~15s.
+      headers: {
+        "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
+      },
+    }
+  );
 }

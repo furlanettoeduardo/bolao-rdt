@@ -52,6 +52,27 @@ export function isKnockoutStage(stage: Stage): boolean {
   return stage !== "GROUP";
 }
 
+/**
+ * Trava do palpite de campeão: fecha quando QUALQUER jogo do mata-mata já
+ * começou ou terminou. Diferente de confiar só no kickoff do primeiro jogo
+ * (que reabriria a janela se esse jogo fosse adiado), considera o status de
+ * todos os confrontos. POSTPONED é deliberadamente IGNORADO — um adiamento
+ * puro não deve travar nem reabrir indevidamente; a trava passa a depender de
+ * algum jogo realmente ter iniciado. Recebe a lista de jogos do mata-mata.
+ */
+export function hasKnockoutStarted(
+  matches: MatchLike[],
+  now: Date = new Date()
+): boolean {
+  return matches.some((m) => {
+    if (isLiveStatus(m.status) || isFinishedStatus(m.status)) return true;
+    if (m.status === "SUSPENDED" || m.status === "CANCELLED") return true;
+    if (m.status === "POSTPONED") return false;
+    // SCHEDULED com kickoff no passado = bola rolando, provedor ainda não atualizou.
+    return new Date(m.kickoff).getTime() <= now.getTime();
+  });
+}
+
 /** Janela "ontem → amanhã" em UTC, usada pelo sync incremental */
 export function syncWindow(now: Date = new Date()): { dateFrom: string; dateTo: string } {
   const day = 24 * 60 * 60 * 1000;

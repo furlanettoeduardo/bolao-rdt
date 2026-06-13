@@ -10,7 +10,7 @@
 
 import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
-import { SCORING } from "./config";
+import { MAX_GOALS, SCORING } from "./config";
 import { getProvider, type ProviderMatch } from "./football/provider";
 import { isFinishedStatus, isKnockoutStage, syncWindow } from "./match-rules";
 import { generateNotifications } from "./notifications";
@@ -252,7 +252,9 @@ async function reconcileGoals(
   minute: number | null
 ): Promise<void> {
   for (const side of ["HOME", "AWAY"] as const) {
-    const target = (side === "HOME" ? homeScore : awayScore) ?? 0;
+    // Teto defensivo: o provider já é validado em pair(), mas limitar aqui
+    // evita qualquer criação em massa de linhas em MatchGoal por dado anômalo.
+    const target = Math.min((side === "HOME" ? homeScore : awayScore) ?? 0, MAX_GOALS);
     const goals = await prisma.matchGoal.findMany({
       where: { matchId, side },
       orderBy: { createdAt: "asc" },

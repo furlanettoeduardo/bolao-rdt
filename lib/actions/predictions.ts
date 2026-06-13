@@ -11,7 +11,11 @@ import { z } from "zod";
 import { auth } from "@/auth";
 import { MAX_GOALS } from "@/lib/config";
 import { prisma } from "@/lib/db";
-import { isKnockoutStage, isMatchLocked } from "@/lib/match-rules";
+import {
+  hasKnockoutStarted,
+  isKnockoutStage,
+  isMatchLocked,
+} from "@/lib/match-rules";
 import type { ActionResult } from "@/lib/types";
 
 const predictionSchema = z.object({
@@ -232,12 +236,13 @@ export async function saveChampionPick(teamId: string): Promise<ActionResult> {
     return { ok: false, error: "Seleção não encontrada." };
   }
 
-  const firstKnockout = await prisma.match.findFirst({
+  // Trava status-aware: fecha quando QUALQUER jogo do mata-mata começou/terminou
+  // (não só pelo kickoff do primeiro, que reabriria a janela se fosse adiado).
+  const knockout = await prisma.match.findMany({
     where: { stage: { not: "GROUP" } },
-    orderBy: { kickoff: "asc" },
-    select: { kickoff: true },
+    select: { status: true, kickoff: true },
   });
-  if (firstKnockout && firstKnockout.kickoff.getTime() <= Date.now()) {
+  if (hasKnockoutStarted(knockout)) {
     return {
       ok: false,
       error: "O mata-mata já começou — palpite de campeão encerrado.",

@@ -4,6 +4,7 @@
 import { describe, expect, it } from "vitest";
 import {
   arePredictionsVisible,
+  hasKnockoutStarted,
   isFinishedStatus,
   isKnockoutStage,
   isLiveStatus,
@@ -189,6 +190,87 @@ describe("status helpers", () => {
     ] as const) {
       expect(isKnockoutStage(stage)).toBe(true);
     }
+  });
+});
+
+describe("hasKnockoutStarted — trava do palpite de campeão (robusta a adiamento)", () => {
+  const NOW = new Date("2026-07-04T12:00:00.000Z");
+  const FUTURE = new Date("2026-07-05T19:00:00.000Z");
+  const PAST = new Date("2026-07-03T19:00:00.000Z");
+
+  it("aberto quando não há nenhum jogo de mata-mata", () => {
+    expect(hasKnockoutStarted([], NOW)).toBe(false);
+  });
+
+  it("aberto quando todos os confrontos são agendados no futuro", () => {
+    expect(
+      hasKnockoutStarted(
+        [
+          { kickoff: FUTURE, status: "SCHEDULED" },
+          { kickoff: FUTURE, status: "SCHEDULED" },
+        ],
+        NOW
+      )
+    ).toBe(false);
+  });
+
+  it("fecha assim que qualquer confronto está ao vivo", () => {
+    expect(
+      hasKnockoutStarted(
+        [
+          { kickoff: FUTURE, status: "SCHEDULED" },
+          { kickoff: PAST, status: "IN_PLAY" },
+        ],
+        NOW
+      )
+    ).toBe(true);
+  });
+
+  it("fecha quando um confronto já terminou", () => {
+    expect(
+      hasKnockoutStarted([{ kickoff: PAST, status: "FINISHED" }], NOW)
+    ).toBe(true);
+  });
+
+  it("fecha com SCHEDULED de kickoff no passado (bola rolando, sync atrasado)", () => {
+    expect(
+      hasKnockoutStarted([{ kickoff: PAST, status: "SCHEDULED" }], NOW)
+    ).toBe(true);
+  });
+
+  it("SUSPENDED/CANCELLED contam como começado", () => {
+    expect(
+      hasKnockoutStarted([{ kickoff: PAST, status: "SUSPENDED" }], NOW)
+    ).toBe(true);
+    expect(
+      hasKnockoutStarted([{ kickoff: PAST, status: "CANCELLED" }], NOW)
+    ).toBe(true);
+  });
+
+  // Regressão do achado: adiar o 1º jogo NÃO deve reabrir a janela se outro
+  // confronto já começou; e um adiamento puro (sem nenhum jogo iniciado) não trava.
+  it("adiamento de um confronto NÃO reabre se outro já está ao vivo", () => {
+    expect(
+      hasKnockoutStarted(
+        [
+          { kickoff: FUTURE, status: "POSTPONED" },
+          { kickoff: PAST, status: "IN_PLAY" },
+        ],
+        NOW
+      )
+    ).toBe(true);
+  });
+
+  it("POSTPONED para o futuro, sem nenhum jogo iniciado, mantém aberto", () => {
+    expect(
+      hasKnockoutStarted(
+        [
+          { kickoff: FUTURE, status: "POSTPONED" },
+          { kickoff: FUTURE, status: "SCHEDULED" },
+        ],
+        NOW
+      )
+    ).toBe(false);
   });
 });
 

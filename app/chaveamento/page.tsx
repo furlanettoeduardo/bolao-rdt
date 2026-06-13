@@ -15,8 +15,8 @@ import { STAGE_LABELS } from "@/lib/format";
 import { isFinishedStatus, isLiveStatus } from "@/lib/match-rules";
 import {
   getChampionPick,
-  getFirstKnockoutKickoff,
   getKnockoutMatches,
+  isChampionPickLocked,
   listTeams,
 } from "@/lib/queries";
 import type { MatchDTO, Stage, TeamDTO } from "@/lib/types";
@@ -26,24 +26,18 @@ export const metadata = { title: "Chaveamento" };
 /** Colunas principais do funil (3º lugar e Final ficam na última coluna) */
 const MAIN_STAGES = ["ROUND_32", "ROUND_16", "QUARTER", "SEMI"] as const satisfies readonly Stage[];
 
-/** Trava do palpite de campeão — sempre relógio do servidor, em UTC */
-function isChampionPickLocked(firstKickoff: Date | null): boolean {
-  return firstKickoff != null && firstKickoff.getTime() <= Date.now();
-}
-
 export default async function ChaveamentoPage() {
   const session = await auth();
   const userId = session?.user?.id;
   if (!userId) redirect("/login");
 
-  const [matches, championPick, firstKickoff, teams] = await Promise.all([
+  const [matches, championPick, championLocked, teams] = await Promise.all([
     getKnockoutMatches(),
     getChampionPick(userId),
-    getFirstKnockoutKickoff(),
+    isChampionPickLocked(),
     listTeams(),
   ]);
 
-  const championLocked = isChampionPickLocked(firstKickoff);
   const championTeamId = championPick?.team.id ?? null;
 
   const byStage = new Map<Stage, MatchDTO[]>();

@@ -46,7 +46,12 @@ export async function registerAction(
   const email = parsed.data.email.trim().toLowerCase();
   const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
-    return { error: "Já existe uma conta com este email." };
+    // Mensagem neutra: evita confirmar de forma determinística que o email já
+    // tem conta (mitiga enumeração), mas guia quem de fato já é cadastrado.
+    return {
+      error:
+        "Não foi possível concluir o cadastro. Se você já tem conta, faça login.",
+    };
   }
 
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();

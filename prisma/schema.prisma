@@ -7,10 +7,17 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  // Variáveis criadas automaticamente pela integração Neon ↔ Vercel:
-  //   POSTGRES_PRISMA_URL   → conexão COM pooler, já no formato do Prisma
-  //                           (inclui pgbouncer=true — evita erro de prepared statement)
-  //   DATABASE_URL_UNPOOLED → conexão DIRETA (sem pooler), usada por `prisma migrate`
+  // Variáveis criadas pela integração Neon ↔ Vercel:
+  //   POSTGRES_PRISMA_URL   → conexão de RUNTIME. DEVE usar o host POOLED do Neon
+  //                           (com sufixo "-pooler") e a query
+  //                           "?sslmode=require&pgbouncer=true&connection_limit=1".
+  //                           ⚠ DISPONIBILIDADE: sem o pooler, cada lambda da
+  //                           Vercel abre conexões diretas e um pico (jogo do
+  //                           Brasil) pode estourar o limite do Neon e derrubar
+  //                           o app inteiro. Confira o valor real na Vercel —
+  //                           ele precisa apontar para o host "-pooler".
+  //   DATABASE_URL_UNPOOLED → conexão DIRETA (sem pooler), usada SÓ por
+  //                           `prisma migrate` (directUrl). Manter sem -pooler.
   // Em dev local, defina as duas com a sua connection string (podem ser iguais).
   url       = env("POSTGRES_PRISMA_URL")
   directUrl = env("DATABASE_URL_UNPOOLED")

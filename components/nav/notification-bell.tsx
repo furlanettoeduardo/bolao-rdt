@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { markNotificationsRead } from "@/lib/actions/notifications";
 import { cn } from "@/lib/cn";
+import { isSafeInternalHref } from "@/lib/security";
 
 interface NotifItem {
   id: string;
@@ -135,11 +136,15 @@ export function NotificationBell() {
                   "block px-4 py-3 transition-colors hover:bg-slate-50",
                   !n.read && "bg-field-50/60"
                 );
+                // Só vira link se o href for um caminho interno seguro —
+                // bloqueia javascript:/data://evil caso um href futuro derive
+                // de input. Hoje todos os hrefs são literais do servidor.
+                const safeHref = isSafeInternalHref(n.href) ? n.href : null;
                 return (
                   <li key={n.id}>
-                    {n.href ? (
+                    {safeHref ? (
                       <Link
-                        href={n.href}
+                        href={safeHref}
                         onClick={() => setOpen(false)}
                         className={cls}
                       >

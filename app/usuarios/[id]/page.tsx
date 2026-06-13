@@ -4,7 +4,7 @@
 
 import type { Metadata } from "next";
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { notFound, redirect } from "next/navigation";
 import { cache } from "react";
 import { auth } from "@/auth";
 import { pointsBadgeVariant } from "@/components/match-card";
@@ -45,7 +45,10 @@ export default async function PublicProfilePage({ params }: PageProps) {
   if (!user) notFound();
 
   const session = await auth();
-  const viewerIsOwner = session?.user?.id === user.id;
+  // Defesa em profundidade: não depende só do middleware para barrar anônimos,
+  // alinhando com as demais páginas autenticadas.
+  if (!session?.user?.id) redirect("/login");
+  const viewerIsOwner = session.user.id === user.id;
 
   const [ranking, history] = await Promise.all([
     getRanking(),

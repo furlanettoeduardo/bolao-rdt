@@ -6,7 +6,12 @@
 import type { Match, Prediction, Team } from "@prisma/client";
 import { prisma } from "./db";
 import { computeRanking, type RankingRow } from "./ranking";
-import { arePredictionsVisible, isLiveStatus, isMatchLocked } from "./match-rules";
+import {
+  arePredictionsVisible,
+  hasKnockoutStarted,
+  isLiveStatus,
+  isMatchLocked,
+} from "./match-rules";
 import { STAGE_ORDER } from "./format";
 import { teamNamePt } from "./team-names";
 import type { MatchDTO, Stage, TeamDTO } from "./types";
@@ -236,14 +241,18 @@ export async function getKnockoutMatches(): Promise<MatchDTO[]> {
     );
 }
 
-/** Kickoff do primeiro jogo do mata-mata — trava do palpite de campeão */
-export async function getFirstKnockoutKickoff(): Promise<Date | null> {
-  const first = await prisma.match.findFirst({
+/**
+ * Trava do palpite de campeão (UTC, no servidor): fecha quando QUALQUER jogo
+ * do mata-mata já começou/terminou — robusto a adiamentos do primeiro jogo.
+ */
+export async function isChampionPickLocked(
+  now: Date = new Date()
+): Promise<boolean> {
+  const knockout = await prisma.match.findMany({
     where: { stage: { not: "GROUP" } },
-    orderBy: { kickoff: "asc" },
-    select: { kickoff: true },
+    select: { status: true, kickoff: true },
   });
-  return first?.kickoff ?? null;
+  return hasKnockoutStarted(knockout, now);
 }
 
 // ── Palpites ─────────────────────────────────────────────────────────────────

@@ -22,16 +22,24 @@ export async function GET() {
     prisma.notification.count({ where: { userId, read: false } }),
   ]);
 
-  return NextResponse.json({
-    unread,
-    items: items.map((n) => ({
-      id: n.id,
-      type: n.type,
-      title: n.title,
-      body: n.body,
-      href: n.href,
-      read: n.read,
-      createdAt: n.createdAt.toISOString(),
-    })),
-  });
+  return NextResponse.json(
+    {
+      unread,
+      items: items.map((n) => ({
+        id: n.id,
+        type: n.type,
+        title: n.title,
+        body: n.body,
+        href: n.href,
+        read: n.read,
+        createdAt: n.createdAt.toISOString(),
+      })),
+    },
+    {
+      // Dados por usuário → cache PRIVADO (nunca em CDN/compartilhado). Curto o
+      // suficiente para amortecer um loop de GET do mesmo cliente sem atrasar o
+      // sino (polling de 60s).
+      headers: { "Cache-Control": "private, max-age=15" },
+    }
+  );
 }

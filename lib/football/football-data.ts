@@ -2,7 +2,7 @@
 // Competição: FIFA World Cup — id 2000, code "WC".
 // Free tier: 10 requisições/minuto — cada sync usa no máximo 2 chamadas.
 
-import { COMPETITION } from "../config";
+import { COMPETITION, MAX_GOALS } from "../config";
 import type { MatchStatus, Stage } from "../types";
 import type {
   FootballProvider,
@@ -132,6 +132,22 @@ function mapGroup(group: string | null): string | null {
 
 function pair(p: FDScorePair | undefined): ProviderScore | null {
   if (!p || p.home === null || p.away === null) return null;
+  // Validação de fronteira: descarta placares fora de faixa (negativos, não
+  // inteiros ou absurdos) vindos do provedor, em vez de gravá-los no banco e
+  // propagá-los para a pontuação/ranking. Tratado como "sem placar".
+  if (
+    !Number.isInteger(p.home) ||
+    !Number.isInteger(p.away) ||
+    p.home < 0 ||
+    p.away < 0 ||
+    p.home > MAX_GOALS ||
+    p.away > MAX_GOALS
+  ) {
+    console.warn(
+      `[football-data] placar fora de faixa descartado: ${p.home}x${p.away}`
+    );
+    return null;
+  }
   return { home: p.home, away: p.away };
 }
 
@@ -156,11 +172,25 @@ export class FootballDataProvider implements FootballProvider {
 
   private async request<T>(path: string): Promise<T> {
     const startedAt = Date.now();
-    const res = await fetch(`${BASE_URL}${path}`, {
-      headers: { "X-Auth-Token": this.token },
-      // Sempre dados frescos — o cache fica no nosso banco, não aqui.
-      cache: "no-store",
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${BASE_URL}${path}`, {
+        headers: { "X-Auth-Token": this.token },
+        // Sempre dados frescos — o cache fica no nosso banco, não aqui.
+        cache: "no-store",
+        // Timeout total: sem isso, um provedor lento/pendurado prenderia a
+        // função serverless até o maxDuration=60s da rota de cron (que roda
+        // a cada 1 min). 10s deixa folga para getMatches + getStandings.
+        signal: AbortSignal.timeout(10_000),
+      });
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "TimeoutError") {
+        throw new Error(
+          `Football-Data.org não respondeu em 10s em ${path} (provedor lento/indisponível).`
+        );
+      }
+      throw err;
+    }
     // Log de diagnóstico (aparece nos logs de runtime da Vercel). O token vai no
     // header, então o path é seguro de logar.
     console.log(
