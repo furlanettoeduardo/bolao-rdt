@@ -69,6 +69,13 @@ export default async function DashboardPage() {
             Palpite nos 104 jogos da Copa do Mundo, pontue a cada acerto e
             dispute o ranking da cidade.
           </p>
+          <Link
+            href="/regras"
+            className="mt-3 inline-flex items-center gap-1.5 rounded-lg bg-white/15 px-3 py-1.5 text-sm font-semibold text-white ring-1 ring-inset ring-white/30 transition-colors hover:bg-white/25"
+          >
+            <span aria-hidden>📋</span> Como funciona o bolão
+            <span aria-hidden>→</span>
+          </Link>
         </div>
       </section>
 

@@ -21,6 +21,11 @@
   --color-cup-blue: #00549f;
   --color-cup-gold: #d4a017;
 
+  /* Cores da bandeira do Brasil — usadas na faixa do topo */
+  --color-br-green: #009c3b;
+  --color-br-yellow: #ffdf00;
+  --color-br-blue: #002776;
+
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Helvetica Neue", Arial, sans-serif;
 }
@@ -33,16 +38,16 @@ body {
   @apply bg-slate-100 text-slate-900 antialiased;
 }
 
-/* Barra tricolor da Copa 2026 — usada no topo do site */
+/* Faixa com as cores da bandeira do Brasil — usada no topo do site */
 .cup-stripe {
   background: linear-gradient(
     90deg,
-    var(--color-cup-red) 0%,
-    var(--color-cup-red) 33.3%,
-    var(--color-cup-green) 33.3%,
-    var(--color-cup-green) 66.6%,
-    var(--color-cup-blue) 66.6%,
-    var(--color-cup-blue) 100%
+    var(--color-br-green) 0%,
+    var(--color-br-green) 33.3%,
+    var(--color-br-yellow) 33.3%,
+    var(--color-br-yellow) 66.6%,
+    var(--color-br-blue) 66.6%,
+    var(--color-br-blue) 100%
   );
 }
 

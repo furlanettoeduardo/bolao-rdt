@@ -52,6 +52,9 @@ model User {
   predictions  Prediction[]
   championPick ChampionPick?
   pointAdjustments PointAdjustment[]
+  notifications    Notification[]
+  // Última posição conhecida no ranking — usada para detectar mudanças e notificar
+  lastRankingPosition Int?
 }
 
 model Team {
@@ -199,6 +202,27 @@ model SyncLog {
   scope      String // "window" | "full" | "manual" | "rescore"
   message    String
   durationMs Int?
+}
+
+// Notificação por usuário (sino do header). Gerada pelo sync de forma idempotente
+// via `key` única por usuário (o sync roda a cada minuto). Tipos: brazil_soon,
+// match_finished, prediction_result, goal, ranking, champion.
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  key       String // dedupe por usuário (ex.: "result:<matchId>", "goal:<matchId>:<total>")
+  type      String
+  title     String
+  body      String?
+  href      String?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, key])
+  @@index([userId, read])
+  @@index([userId, createdAt])
 }
 
 // Ajuste manual de pontos por usuário (bônus/penalidade do admin). Cada

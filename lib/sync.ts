@@ -13,6 +13,7 @@ import { prisma } from "./db";
 import { SCORING } from "./config";
 import { getProvider, type ProviderMatch } from "./football/provider";
 import { isFinishedStatus, isKnockoutStage, syncWindow } from "./match-rules";
+import { generateNotifications } from "./notifications";
 import { scorePrediction } from "./scoring";
 
 export type SyncScope = "window" | "full" | "manual";
@@ -43,11 +44,15 @@ export async function runSync(scope: SyncScope): Promise<SyncResult> {
     const teamByExternalId = new Map(teams.map((t) => [t.externalId, t]));
 
     const toRescore: string[] = [];
+    const justFinishedMatchIds: string[] = [];
+    const goalMatchIds: string[] = [];
 
     for (const pm of providerMatches) {
       const result = await upsertMatch(pm, teamByExternalId);
       if (result.changed) matchesUpdated++;
       if (result.needsScoring) toRescore.push(result.matchId);
+      if (result.justFinished) justFinishedMatchIds.push(result.matchId);
+      if (result.goalsAdded) goalMatchIds.push(result.matchId);
     }
 
     for (const matchId of toRescore) {
@@ -106,6 +111,14 @@ export async function runSync(scope: SyncScope): Promise<SyncResult> {
 
     await creditChampionIfFinalFinished();
 
+    // Notificações (sino) — idempotente; roda após rescore/crédito de campeão
+    // para refletir pontos e ranking corretos. Não derruba o sync se falhar.
+    try {
+      await generateNotifications({ justFinishedMatchIds, goalMatchIds });
+    } catch (err) {
+      console.error("Falha ao gerar notificações:", err);
+    }
+
     // Diagnóstico de latência: o que a API retornou para os jogos ao vivo, e se
     // algum jogo já passou do horário mas a API ainda o reporta como agendado
     // (sinal de que o atraso está no provedor, não no nosso pipeline/cron).
@@ -162,6 +175,10 @@ interface UpsertOutcome {
   matchId: string;
   changed: boolean;
   needsScoring: boolean;
+  /** Transitou para encerrado neste sync */
+  justFinished: boolean;
+  /** O placar (gols) aumentou neste sync */
+  goalsAdded: boolean;
 }
 
 /**
@@ -337,7 +354,13 @@ async function upsertMatch(
     if (newHome != null || newAway != null) {
       await reconcileGoals(created.id, newHome, newAway, currentMinuteOf(clock, now));
     }
-    return { matchId: created.id, changed: true, needsScoring: finished };
+    return {
+      matchId: created.id,
+      changed: true,
+      needsScoring: finished,
+      justFinished: finished,
+      goalsAdded: (newHome ?? 0) + (newAway ?? 0) > 0,
+    };
   }
 
   const changed =
@@ -389,7 +412,12 @@ async function upsertMatch(
     needsScoring = true;
   }
 
-  return { matchId: existing.id, changed, needsScoring };
+  const justFinished = finished && !isFinishedStatus(existing.status);
+  const oldTotal = (existing.homeScore ?? 0) + (existing.awayScore ?? 0);
+  const newTotal = (newHome ?? 0) + (newAway ?? 0);
+  const goalsAdded = newTotal > oldTotal;
+
+  return { matchId: existing.id, changed, needsScoring, justFinished, goalsAdded };
 }
 
 /**

@@ -19,6 +19,7 @@ import { Button } from "@/components/ui/button";
 import { LocalTime } from "@/components/local-time";
 import { MatchStatusBadge } from "@/components/match-status-badge";
 import { TeamLabel } from "@/components/team-label";
+import { Tooltip } from "@/components/ui/tooltip";
 import {
   usePredictionsBoard,
   type PredictionDraft,
@@ -190,7 +191,9 @@ export function PredictionCard({
               +{prediction!.points} pts
             </Badge>
           ) : locked ? (
-            <Badge variant="neutral">🔒 Travado</Badge>
+            <Tooltip label="O jogo já começou — não é mais possível criar ou editar palpites.">
+              <Badge variant="neutral">🔒 Travado</Badge>
+            </Tooltip>
           ) : prediction ? (
             <Badge variant="success">Palpite feito</Badge>
           ) : (
@@ -267,13 +270,15 @@ export function PredictionCard({
       ) : null}
 
       {!locked ? (
-        <div className="mt-3 flex items-center justify-between gap-2">
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
           <span className="text-xs text-slate-400">
             Editável até o início do jogo
           </span>
           <span className="flex items-center gap-2">
             {state.kind === "saved" && !isDirty ? (
-              <span className="text-xs font-semibold text-field-700">Salvo ✓</span>
+              <span className="text-xs font-semibold text-field-700">
+                Salvo ✓ — dá pra atualizar até o jogo começar
+              </span>
             ) : null}
             {state.kind === "error" ? (
               <span role="alert" className="text-xs font-semibold text-cup-red">

@@ -4,6 +4,7 @@ import Link from "next/link";
 import { auth } from "@/auth";
 import { APP_NAME } from "@/lib/config";
 import { NavLinks } from "./nav-links";
+import { NotificationBell } from "./notification-bell";
 import { UserMenu } from "./user-menu";
 
 export async function Header() {
@@ -23,8 +24,9 @@ export async function Header() {
           </Link>
 
           {session?.user ? (
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1 sm:gap-2">
               <NavLinks />
+              <NotificationBell />
               <UserMenu
                 name={session.user.name ?? "Usuário"}
                 isAdmin={session.user.role === "ADMIN"}

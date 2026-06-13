@@ -132,6 +132,9 @@ export function PredictionsBoard({ children }: { children: ReactNode }) {
                 <>
                   {feedback.saved}{" "}
                   {feedback.saved === 1 ? "palpite salvo" : "palpites salvos"} ✓
+                  <span className="font-normal text-white/70">
+                    {" "}· dá pra atualizar até o jogo começar
+                  </span>
                 </>
               ) : feedback.kind === "partial" ? (
                 <>
