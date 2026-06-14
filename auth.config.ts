@@ -5,7 +5,21 @@ import type { NextAuthConfig } from "next-auth";
 import type { Role } from "@/lib/types";
 
 /** Rotas acessíveis sem login */
-const PUBLIC_PATHS = new Set(["/login", "/cadastro", "/regras"]);
+const PUBLIC_PATHS = new Set([
+  "/login",
+  "/cadastro",
+  "/regras",
+  "/esqueci-senha",
+  "/redefinir-senha",
+]);
+
+// Rotas públicas que NÃO devem expulsar quem já está logado — caso de quem
+// abre um link de reset (recebido por e-mail) com uma sessão ainda ativa.
+const PUBLIC_WHEN_LOGGED_IN = new Set([
+  "/regras",
+  "/esqueci-senha",
+  "/redefinir-senha",
+]);
 
 export const authConfig = {
   pages: {
@@ -25,7 +39,7 @@ export const authConfig = {
 
       if (PUBLIC_PATHS.has(pathname)) {
         // Usuário logado não precisa ver login/cadastro
-        if (isLoggedIn && pathname !== "/regras") {
+        if (isLoggedIn && !PUBLIC_WHEN_LOGGED_IN.has(pathname)) {
           return Response.redirect(new URL("/", request.nextUrl));
         }
         return true;

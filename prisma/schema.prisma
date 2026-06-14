@@ -60,6 +60,7 @@ model User {
   championPick ChampionPick?
   pointAdjustments PointAdjustment[]
   notifications    Notification[]
+  passwordResets   PasswordResetToken[]
   // Última posição conhecida no ranking — usada para detectar mudanças e notificar
   lastRankingPosition Int?
 }
@@ -230,6 +231,23 @@ model Notification {
   @@unique([userId, key])
   @@index([userId, read])
   @@index([userId, createdAt])
+}
+
+// Token de redefinição de senha ("Esqueceu sua senha?"). Guardamos só o HASH
+// (sha256) do token — o valor cru vive apenas no link enviado por e-mail. Uso
+// único (usedAt) e expiração curta (expiresAt). Após um reset bem-sucedido, o
+// token usado é marcado (usedAt) e os demais do usuário são removidos.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique // sha256 do token cru
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // Ajuste manual de pontos por usuário (bônus/penalidade do admin). Cada

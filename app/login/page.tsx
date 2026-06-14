@@ -1,10 +1,17 @@
 import Link from "next/link";
 import { LoginForm } from "@/components/auth/login-form";
 import { Card, CardBody } from "@/components/ui/card";
+import { FormSuccess } from "@/components/ui/input";
 
 export const metadata = { title: "Entrar" };
 
-export default function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ reset?: string }>;
+}) {
+  const { reset } = await searchParams;
+
   return (
     <div className="mx-auto w-full max-w-sm pt-6 md:pt-12">
       <h1 className="mb-1 text-center text-2xl font-bold text-field-900">
@@ -13,6 +20,14 @@ export default function LoginPage() {
       <p className="mb-6 text-center text-sm text-slate-500">
         Acesse sua conta para registrar seus palpites.
       </p>
+
+      {reset === "ok" ? (
+        <div className="mb-4">
+          <FormSuccess>
+            Senha redefinida com sucesso. Entre com a nova senha.
+          </FormSuccess>
+        </div>
+      ) : null}
 
       <Card>
         <CardBody className="py-5">
@@ -27,6 +42,15 @@ export default function LoginPage() {
           className="font-semibold text-field-700 hover:underline"
         >
           Cadastre-se
+        </Link>
+      </p>
+
+      <p className="mt-2 text-center text-sm">
+        <Link
+          href="/esqueci-senha"
+          className="text-field-700 hover:underline"
+        >
+          Esqueceu sua senha?
         </Link>
       </p>
 
