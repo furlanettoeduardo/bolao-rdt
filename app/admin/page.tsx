@@ -76,6 +76,7 @@ export default async function AdminPage() {
       awayTeamId: match.awayTeamId,
       awayTeamName: match.awayTeam?.name ?? null,
       predictionCount: match._count.predictions,
+      manualOverride: match.manualOverride,
     };
   });
 

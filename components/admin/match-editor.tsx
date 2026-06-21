@@ -28,6 +28,8 @@ export interface AdminMatch {
   awayTeamId: string | null;
   awayTeamName: string | null;
   predictionCount: number;
+  /** true = jogo travado: o sync com a API não sobrescreve este resultado */
+  manualOverride: boolean;
 }
 
 const STATUS_OPTIONS = [
@@ -52,6 +54,9 @@ export function MatchEditor({ matches }: { matches: AdminMatch[] }) {
   const [away, setAway] = useState("");
   const [status, setStatus] = useState<MatchStatus>("SCHEDULED");
   const [advancing, setAdvancing] = useState("");
+  // Trava contra a sincronização com a API. Liga por padrão: editar à mão
+  // significa querer que o resultado não seja sobrescrito pelo provedor.
+  const [protect, setProtect] = useState(true);
   const [feedback, setFeedback] = useState<Feedback>({ kind: "idle" });
   const [isPending, startTransition] = useTransition();
 
@@ -66,10 +71,14 @@ export function MatchEditor({ matches }: { matches: AdminMatch[] }) {
       setHome(match.homeScore != null ? String(match.homeScore) : "");
       setAway(match.awayScore != null ? String(match.awayScore) : "");
       setStatus(match.status);
+      // Padrão seguro: abre sempre com a trava ligada (editar à mão = não
+      // querer sobrescrita da API). O estado atual aparece como aviso abaixo.
+      setProtect(true);
     } else {
       setHome("");
       setAway("");
       setStatus("SCHEDULED");
+      setProtect(true);
     }
   }
 
@@ -97,6 +106,7 @@ export function MatchEditor({ matches }: { matches: AdminMatch[] }) {
         homeScore: homeNum,
         awayScore: awayNum,
         advancingTeamId: needsAdvancing && advancing !== "" ? advancing : null,
+        manualOverride: protect,
       });
       if (result.ok) {
         setFeedback({ kind: "success" });
@@ -220,6 +230,27 @@ export function MatchEditor({ matches }: { matches: AdminMatch[] }) {
                 </p>
               )
             ) : null}
+
+            <div className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+              <label className="flex items-start gap-2 text-sm text-slate-800">
+                <input
+                  type="checkbox"
+                  checked={protect}
+                  disabled={isPending}
+                  onChange={(e) => setProtect(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 text-field-600 focus:ring-field-600/30"
+                />
+                <span>
+                  🔒 Travar este resultado — a sincronização com a API{" "}
+                  <strong>não</strong> vai sobrescrevê-lo.
+                </span>
+              </label>
+              <p className="mt-1 pl-6 text-xs text-slate-500">
+                {selected.manualOverride
+                  ? "Este jogo já está travado. Desmarque para devolver o controle à API no próximo sync."
+                  : "Hoje a API atualiza este jogo. Deixe marcado para que sua edição não seja sobrescrita."}
+              </p>
+            </div>
 
             <div className="flex items-center justify-between gap-3">
               <p className="text-xs text-amber-700">

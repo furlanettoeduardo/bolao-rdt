@@ -9,7 +9,12 @@ import { auth } from "@/auth";
 import { MAX_GOALS } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { isFinishedStatus, isKnockoutStage } from "@/lib/match-rules";
-import { creditChampionIfFinalFinished, rescoreMatch, runSync } from "@/lib/sync";
+import {
+  creditChampionIfFinalFinished,
+  reconcileGoals,
+  rescoreMatch,
+  runSync,
+} from "@/lib/sync";
 import type { ActionResult, MatchStatus } from "@/lib/types";
 
 async function requireAdmin(): Promise<string | null> {
@@ -68,6 +73,10 @@ const matchUpdateSchema = z.object({
   homeScore: z.number().int().min(0).max(MAX_GOALS).nullable(),
   awayScore: z.number().int().min(0).max(MAX_GOALS).nullable(),
   advancingTeamId: z.string().min(1).nullish(),
+  // Trava o jogo contra a sincronização com a API. Liga por padrão: o sentido
+  // da edição manual é justamente não ser sobrescrito pelo provedor. Desligar
+  // devolve o controle à API (o próximo sync volta a atualizar este jogo).
+  manualOverride: z.boolean().default(true),
 });
 
 export type AdminMatchUpdateInput = z.input<typeof matchUpdateSchema>;
@@ -85,7 +94,7 @@ export async function updateMatchAction(
   if (!parsed.success) {
     return { ok: false, error: "Dados inválidos." };
   }
-  const { matchId, status, homeScore, awayScore } = parsed.data;
+  const { matchId, status, homeScore, awayScore, manualOverride } = parsed.data;
 
   const match = await prisma.match.findUnique({ where: { id: matchId } });
   if (!match) return { ok: false, error: "Jogo não encontrado." };
@@ -123,8 +132,13 @@ export async function updateMatchAction(
 
   await prisma.match.update({
     where: { id: matchId },
-    data: { status, homeScore, awayScore, advancingTeamId },
+    data: { status, homeScore, awayScore, advancingTeamId, manualOverride },
   });
+
+  // Acerta a linha do tempo de gols (MatchGoal) para bater com o placar manual,
+  // já que a edição não passa pela detecção de gols do sync. Minuto = null
+  // (correção manual não tem estimativa de cronômetro).
+  await reconcileGoals(matchId, homeScore, awayScore, null);
 
   // Repontua sempre: ao finalizar, calcula os pontos; ao "des-finalizar" um
   // jogo (correção de engano), rescoreMatch zera os pontos antigos.
@@ -135,7 +149,7 @@ export async function updateMatchAction(
     data: {
       ok: true,
       scope: "manual",
-      message: `Resultado editado manualmente (jogo ${match.externalId}): ${homeScore ?? "-"}x${awayScore ?? "-"}, status ${status}.`,
+      message: `Resultado editado manualmente (jogo ${match.externalId}): ${homeScore ?? "-"}x${awayScore ?? "-"}, status ${status}${manualOverride ? " — travado da API" : " — liberado p/ API"}.`,
     },
   });
 

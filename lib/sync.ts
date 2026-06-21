@@ -245,7 +245,7 @@ function currentMinuteOf(
  * Os gols são detectados pela mudança de placar; o autor não é gravado (a API
  * grátis não fornece) e o minuto é estimado pelo cronômetro interno.
  */
-async function reconcileGoals(
+export async function reconcileGoals(
   matchId: string,
   homeScore: number | null,
   awayScore: number | null,
@@ -306,6 +306,19 @@ async function upsertMatch(
   const existing = await prisma.match.findUnique({
     where: { externalId: pm.externalId },
   });
+
+  // Jogo travado manualmente pelo admin: a API não sobrescreve NADA deste jogo
+  // (placar/status/quem-avançou). A Football-Data pode enviar dado errado; o
+  // admin assumiu o controle e destrava no painel se quiser devolver à API.
+  if (existing?.manualOverride) {
+    return {
+      matchId: existing.id,
+      changed: false,
+      needsScoring: false,
+      justFinished: false,
+      goalsAdded: false,
+    };
+  }
 
   // Cronômetro interno (minuto de jogo) — depende do estado anterior.
   const clock = nextClock(

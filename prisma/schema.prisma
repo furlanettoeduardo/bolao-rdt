@@ -109,6 +109,12 @@ model Match {
   penaltyWinnerTeamId String?
   advancingTeamId     String? // quem avançou (mata-mata), seja qual for a forma de decisão
 
+  // Resultado travado manualmente pelo admin: quando true, o sync com a API
+  // NÃO sobrescreve placar/status/quem-avançou deste jogo (a API pode estar
+  // enviando dado errado). Mesma ideia do `pointsOverride` em Prediction; o
+  // admin pode destravar no painel para devolver o controle ao provedor.
+  manualOverride Boolean @default(false)
+
   venue     String?
   city      String?
   referee   String? // nome do árbitro principal, quando a API informar
