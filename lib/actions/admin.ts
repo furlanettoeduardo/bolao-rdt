@@ -6,6 +6,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { recordAudit } from "@/lib/audit";
 import { MAX_GOALS } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import { isFinishedStatus, isKnockoutStage } from "@/lib/match-rules";
@@ -53,6 +54,17 @@ export async function triggerSyncAction(): Promise<
 
   const result = await runSync("manual");
   revalidateAll();
+  await recordAudit({
+    action: "admin.sync",
+    category: "admin",
+    summary: `Disparou sincronização manual. ${result.message}`,
+    ok: result.ok,
+    metadata: {
+      matchesUpdated: result.matchesUpdated,
+      matchesScored: result.matchesScored,
+      standingsUpdated: result.standingsUpdated,
+    },
+  });
   return result.ok
     ? { ok: true, data: { message: result.message } }
     : { ok: false, error: result.message };
@@ -153,6 +165,24 @@ export async function updateMatchAction(
     },
   });
 
+  await recordAudit({
+    action: "admin.match.update",
+    category: "admin",
+    summary: `Editou o resultado do jogo #${match.externalId}: ${homeScore ?? "-"}×${awayScore ?? "-"} (${status})${manualOverride ? " — travado da API" : " — liberado p/ API"}.`,
+    targetType: "match",
+    targetId: matchId,
+    targetLabel: `#${match.externalId}`,
+    metadata: {
+      before: {
+        status: match.status,
+        homeScore: match.homeScore,
+        awayScore: match.awayScore,
+      },
+      after: { status, homeScore, awayScore, advancingTeamId },
+      manualOverride,
+    },
+  });
+
   revalidateAll();
   return { ok: true };
 }
@@ -238,6 +268,13 @@ export async function setPredictionPointsBatch(
     )
   );
 
+  await recordAudit({
+    action: "admin.prediction.points_override",
+    category: "admin",
+    summary: `Ajustou os pontos (override) de ${parsed.data.length} palpite(s).`,
+    metadata: { updates: parsed.data },
+  });
+
   revalidateAll();
   return { ok: true, data: { updated: parsed.data.length } };
 }
@@ -304,12 +341,22 @@ export async function addUserAdjustment(
 
   const user = await prisma.user.findUnique({
     where: { id: userId },
-    select: { id: true },
+    select: { id: true, name: true },
   });
   if (!user) return { ok: false, error: "Usuário não encontrado." };
 
   const created = await prisma.pointAdjustment.create({
     data: { userId, delta, reason: reason && reason.length > 0 ? reason : null },
+  });
+
+  await recordAudit({
+    action: "admin.adjustment.add",
+    category: "admin",
+    summary: `Lançou ajuste de ${delta > 0 ? "+" : ""}${delta} ponto(s) para ${user.name}${reason ? ` (${reason})` : ""}.`,
+    targetType: "user",
+    targetId: user.id,
+    targetLabel: user.name,
+    metadata: { delta, reason: reason ?? null },
   });
 
   revalidateAll();
@@ -330,7 +377,26 @@ export async function deleteUserAdjustment(
 ): Promise<ActionResult> {
   if (!(await requireAdmin())) return { ok: false, error: "Acesso negado." };
 
+  // Lê antes de apagar para registrar o que foi removido na auditoria.
+  const adj = await prisma.pointAdjustment.findUnique({
+    where: { id: adjustmentId },
+    include: { user: { select: { id: true, name: true } } },
+  });
+
   await prisma.pointAdjustment.delete({ where: { id: adjustmentId } });
+
+  await recordAudit({
+    action: "admin.adjustment.delete",
+    category: "admin",
+    summary: adj
+      ? `Removeu ajuste de ${adj.delta > 0 ? "+" : ""}${adj.delta} ponto(s) de ${adj.user.name}.`
+      : "Removeu um ajuste de pontos.",
+    targetType: "user",
+    targetId: adj?.user.id ?? null,
+    targetLabel: adj?.user.name ?? null,
+    metadata: adj ? { delta: adj.delta, reason: adj.reason } : null,
+  });
+
   revalidateAll();
   return { ok: true };
 }
@@ -345,7 +411,20 @@ export async function setUserRoleAction(
     return { ok: false, error: "Você não pode alterar seu próprio papel." };
   }
 
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, role: true },
+  });
   await prisma.user.update({ where: { id: userId }, data: { role } });
+  await recordAudit({
+    action: "admin.user.set_role",
+    category: "admin",
+    summary: `Alterou o papel de ${target?.name ?? userId} para ${role}.`,
+    targetType: "user",
+    targetId: userId,
+    targetLabel: target?.name ?? null,
+    metadata: { from: target?.role ?? null, to: role },
+  });
   revalidatePath("/admin");
   return { ok: true };
 }
@@ -357,7 +436,21 @@ export async function deleteUserAction(userId: string): Promise<ActionResult> {
     return { ok: false, error: "Você não pode excluir a própria conta." };
   }
 
+  // Captura os dados ANTES de excluir — o snapshot fica preservado no log.
+  const target = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { name: true, email: true, role: true },
+  });
   await prisma.user.delete({ where: { id: userId } });
+  await recordAudit({
+    action: "admin.user.delete",
+    category: "admin",
+    summary: `Excluiu o usuário ${target?.name ?? userId}${target?.email ? ` (${target.email})` : ""}.`,
+    targetType: "user",
+    targetId: userId,
+    targetLabel: target?.name ?? null,
+    metadata: { email: target?.email ?? null, role: target?.role ?? null },
+  });
   revalidateAll();
   return { ok: true };
 }

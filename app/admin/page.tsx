@@ -4,10 +4,12 @@
 
 import { redirect } from "next/navigation";
 import { auth } from "@/auth";
+import { AuditLogPanel } from "@/components/admin/audit-log-panel";
 import { MatchEditor, type AdminMatch } from "@/components/admin/match-editor";
 import { SyncPanel, type SyncLogDTO } from "@/components/admin/sync-panel";
 import { UserPointsAdjuster } from "@/components/admin/user-points-adjuster";
 import { UsersTable, type AdminUser } from "@/components/admin/users-table";
+import { queryAuditLogs } from "@/lib/audit-query";
 import { prisma } from "@/lib/db";
 import { STAGE_LABELS } from "@/lib/format";
 import { getSyncLogs, listUsers } from "@/lib/queries";
@@ -24,7 +26,7 @@ export default async function AdminPage() {
   const session = await auth();
   if (session?.user?.role !== "ADMIN") redirect("/");
 
-  const [syncLogs, users, matches] = await Promise.all([
+  const [syncLogs, users, matches, auditPage] = await Promise.all([
     getSyncLogs(120),
     listUsers(),
     prisma.match.findMany({
@@ -35,6 +37,7 @@ export default async function AdminPage() {
       },
       orderBy: { kickoff: "asc" },
     }),
+    queryAuditLogs({ page: 0, pageSize: 20 }),
   ]);
 
   // Serializa datas como ISO strings antes de passar a client components
@@ -98,6 +101,8 @@ export default async function AdminPage() {
       <UserPointsAdjuster users={adminUsers} />
 
       <UsersTable users={adminUsers} currentUserId={session.user.id} />
+
+      <AuditLogPanel initial={auditPage} />
     </div>
   );
 }

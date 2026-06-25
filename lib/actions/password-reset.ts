@@ -9,6 +9,7 @@ import bcrypt from "bcryptjs";
 import { redirect } from "next/navigation";
 import { after } from "next/server";
 import { z } from "zod";
+import { recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { sendPasswordResetEmail } from "@/lib/email";
 import {
@@ -40,6 +41,18 @@ export async function requestPasswordResetAction(
   }
 
   const email = parsed.data.email.trim().toLowerCase();
+
+  // Registra o PEDIDO sempre (exista ou não a conta) — mantém o tempo de
+  // resposta constante e não vira oráculo de enumeração. Ator anônimo; o IP
+  // ajuda a flagrar abuso. Não revela se o e-mail existe.
+  await recordAudit({
+    action: "auth.password_reset.request",
+    category: "auth",
+    summary: `Pedido de redefinição de senha para ${email}.`,
+    actor: { id: null, name: null, email },
+    targetType: "email",
+    targetLabel: email,
+  });
 
   // Todo o trabalho roda APÓS a resposta (next/server `after`): assim a
   // latência é a mesma exista ou não o e-mail, e o tempo de resposta não vira
@@ -141,6 +154,24 @@ export async function resetPasswordAction(
       where: { userId: token.userId, id: { not: token.id } },
     }),
   ]);
+
+  const account = await prisma.user.findUnique({
+    where: { id: token.userId },
+    select: { id: true, name: true, email: true },
+  });
+  await recordAudit({
+    action: "auth.password_reset.complete",
+    category: "auth",
+    summary: `Redefiniu a senha via link de recuperação${account ? ` (${account.email})` : ""}.`,
+    actor: {
+      id: account?.id ?? token.userId,
+      name: account?.name ?? null,
+      email: account?.email ?? null,
+    },
+    targetType: "user",
+    targetId: token.userId,
+    targetLabel: account?.name ?? null,
+  });
 
   redirect("/login?reset=ok");
 }

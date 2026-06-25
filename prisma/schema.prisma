@@ -270,3 +270,31 @@ model PointAdjustment {
 
   @@index([userId])
 }
+
+// Log de auditoria — registro imutável de TODA ação interativa do usuário
+// (cadastro, login, palpites, perfil, reset de senha e ações de admin).
+// Visível SOMENTE no painel admin. De propósito NÃO tem FK para User: o ator é
+// guardado como snapshot (actorName/actorEmail) para o registro sobreviver à
+// exclusão da conta. `metadata` (JSON) guarda o "antes/depois" — o que mudou,
+// foi adicionado ou removido.
+model AuditLog {
+  id          String   @id @default(cuid())
+  createdAt   DateTime @default(now())
+  category    String // "auth" | "prediction" | "profile" | "admin"
+  action      String // chave da ação, ex.: "admin.user.delete"
+  actorId     String? // id de quem executou (null = anônimo: login/cadastro/reset)
+  actorName   String? // snapshot do nome do ator
+  actorEmail  String? // snapshot do email do ator
+  targetType  String? // "user" | "match" | "prediction" | "adjustment" | "team" | ...
+  targetId    String?
+  targetLabel String? // rótulo legível do alvo
+  summary     String // descrição curta em pt-BR
+  metadata    Json? // detalhes estruturados (antes/depois, valores)
+  ip          String? // IP de origem (x-forwarded-for / x-real-ip)
+  userAgent   String?
+  ok          Boolean  @default(true)
+
+  @@index([createdAt])
+  @@index([category])
+  @@index([actorId])
+}

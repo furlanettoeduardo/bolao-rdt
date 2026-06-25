@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { auth, unstable_update } from "@/auth";
+import { recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 
 export interface ProfileFormState {
@@ -31,9 +32,24 @@ export async function updateNameAction(
     return { error: parsed.error.issues[0]?.message ?? "Nome inválido." };
   }
 
+  const previousName = session.user.name ?? null;
   await prisma.user.update({
     where: { id: session.user.id },
     data: { name: parsed.data },
+  });
+  await recordAudit({
+    action: "profile.update_name",
+    category: "profile",
+    summary: `Alterou o nome de "${previousName ?? "—"}" para "${parsed.data}".`,
+    targetType: "user",
+    targetId: session.user.id,
+    targetLabel: parsed.data,
+    actor: {
+      id: session.user.id,
+      name: parsed.data,
+      email: session.user.email,
+    },
+    metadata: { from: previousName, to: parsed.data },
   });
   // Atualiza o nome gravado no JWT — sem isso, header e saudação mostrariam o
   // nome antigo até o usuário relogar (a sessão é JWT, não consulta o banco).
@@ -82,6 +98,15 @@ export async function changePasswordAction(
   await prisma.user.update({
     where: { id: user.id },
     data: { passwordHash },
+  });
+  await recordAudit({
+    action: "profile.change_password",
+    category: "profile",
+    summary: "Alterou a própria senha.",
+    targetType: "user",
+    targetId: user.id,
+    targetLabel: user.name,
+    actor: { id: user.id, name: user.name, email: user.email },
   });
   return { success: "Senha alterada com sucesso." };
 }

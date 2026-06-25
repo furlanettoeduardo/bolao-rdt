@@ -9,6 +9,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { auth } from "@/auth";
+import { recordAudit } from "@/lib/audit";
 import { MAX_GOALS } from "@/lib/config";
 import { prisma } from "@/lib/db";
 import {
@@ -53,7 +54,13 @@ export async function savePrediction(
   }
   const { matchId, homeScore, awayScore } = parsed.data;
 
-  const match = await prisma.match.findUnique({ where: { id: matchId } });
+  const match = await prisma.match.findUnique({
+    where: { id: matchId },
+    include: {
+      homeTeam: { select: { code: true } },
+      awayTeam: { select: { code: true } },
+    },
+  });
   if (!match) {
     return { ok: false, error: "Jogo não encontrado." };
   }
@@ -84,6 +91,11 @@ export async function savePrediction(
     advancingTeamId = choice;
   }
 
+  const previous = await prisma.prediction.findUnique({
+    where: { userId_matchId: { userId: session.user.id, matchId } },
+    select: { homeScore: true, awayScore: true },
+  });
+
   await prisma.prediction.upsert({
     where: { userId_matchId: { userId: session.user.id, matchId } },
     create: {
@@ -94,6 +106,29 @@ export async function savePrediction(
       advancingTeamId,
     },
     update: { homeScore, awayScore, advancingTeamId },
+  });
+
+  const matchLabel = `${match.homeTeam?.code ?? "?"} × ${match.awayTeam?.code ?? "?"}`;
+  await recordAudit({
+    action: previous ? "prediction.update" : "prediction.create",
+    category: "prediction",
+    summary: `${previous ? "Alterou" : "Registrou"} palpite ${homeScore}×${awayScore} em ${matchLabel}.`,
+    targetType: "match",
+    targetId: matchId,
+    targetLabel: matchLabel,
+    actor: {
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+    },
+    metadata: {
+      homeScore,
+      awayScore,
+      advancingTeamId,
+      previous: previous
+        ? { homeScore: previous.homeScore, awayScore: previous.awayScore }
+        : null,
+    },
   });
 
   revalidateMatchPages(matchId, session.user.id);
@@ -220,6 +255,25 @@ export async function savePredictions(
     revalidatePath("/jogos");
     revalidatePath("/perfil");
     revalidatePath(`/usuarios/${userId}`);
+
+    await recordAudit({
+      action: "prediction.save_batch",
+      category: "prediction",
+      summary: `Salvou ${valid.length} palpite(s) de uma vez${failed.length ? ` (${failed.length} recusado(s))` : ""}.`,
+      actor: {
+        id: userId,
+        name: session.user.name,
+        email: session.user.email,
+      },
+      metadata: {
+        saved: valid.map((v) => ({
+          matchId: v.matchId,
+          homeScore: v.homeScore,
+          awayScore: v.awayScore,
+        })),
+        failedCount: failed.length,
+      },
+    });
   }
 
   return { ok: true, data: { saved: valid.length, failed } };
@@ -253,6 +307,20 @@ export async function saveChampionPick(teamId: string): Promise<ActionResult> {
     where: { userId: session.user.id },
     create: { userId: session.user.id, teamId },
     update: { teamId },
+  });
+
+  await recordAudit({
+    action: "prediction.champion",
+    category: "prediction",
+    summary: `Escolheu ${team.name} como campeão.`,
+    targetType: "team",
+    targetId: team.id,
+    targetLabel: team.name,
+    actor: {
+      id: session.user.id,
+      name: session.user.name,
+      email: session.user.email,
+    },
   });
 
   revalidatePath("/");

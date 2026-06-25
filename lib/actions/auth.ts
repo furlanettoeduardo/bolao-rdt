@@ -7,6 +7,7 @@ import { AuthError } from "next-auth";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { signIn, signOut } from "@/auth";
+import { recordAudit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 
 export interface AuthFormState {
@@ -57,13 +58,24 @@ export async function registerAction(
   const adminEmail = process.env.ADMIN_EMAIL?.trim().toLowerCase();
   const passwordHash = await bcrypt.hash(parsed.data.password, 10);
 
-  await prisma.user.create({
+  const created = await prisma.user.create({
     data: {
       name: parsed.data.name,
       email,
       passwordHash,
       role: adminEmail && email === adminEmail ? "ADMIN" : "USER",
     },
+  });
+
+  await recordAudit({
+    action: "auth.register",
+    category: "auth",
+    summary: `Novo cadastro: ${created.name} (${created.email}).`,
+    actor: { id: created.id, name: created.name, email: created.email },
+    targetType: "user",
+    targetId: created.id,
+    targetLabel: created.name,
+    metadata: { role: created.role },
   });
 
   // Login automático após o cadastro (lança NEXT_REDIRECT em caso de sucesso)
@@ -98,6 +110,16 @@ export async function loginAction(
     await signIn("credentials", { email, password, redirectTo: "/" });
   } catch (error) {
     if (error instanceof AuthError) {
+      // Tentativa de login malsucedida — registra com IP (valor de segurança).
+      // O login BEM-sucedido é registrado pelo evento signIn do Auth.js.
+      await recordAudit({
+        action: "auth.login.failed",
+        category: "auth",
+        summary: `Tentativa de login falhou: ${email}.`,
+        ok: false,
+        actor: { id: null, name: null, email },
+        metadata: { reason: error.type },
+      });
       return error.type === "CredentialsSignin"
         ? { error: "Email ou senha incorretos." }
         : { error: "Não foi possível entrar. Tente novamente." };
