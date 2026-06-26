@@ -12,7 +12,12 @@ import type { Prisma } from "@prisma/client";
 import { prisma } from "./db";
 import { MAX_GOALS, SCORING } from "./config";
 import { getProvider, type ProviderMatch } from "./football/provider";
-import { isFinishedStatus, isKnockoutStage, syncWindow } from "./match-rules";
+import {
+  isFinishedStatus,
+  isKnockoutStage,
+  isLiveStatus,
+  syncWindow,
+} from "./match-rules";
 import { generateNotifications } from "./notifications";
 import { scorePrediction } from "./scoring";
 
@@ -27,6 +32,37 @@ export interface SyncResult {
   durationMs: number;
 }
 
+// Janela em que vale a pena rodar o sync incremental de 1 em 1 min: algum jogo
+// ao vivo, prestes a começar (apito inicial sem atraso) ou recém-terminado
+// (ainda a pontuar). Fora disso não há nada a fazer.
+// O lead precisa cobrir a notificação "⏰ Falta 1h": notifyUpcomingMatches busca
+// SCHEDULED com kickoff em (agora, agora+60min]. Se o gate só abrisse a 15 min,
+// esse lembrete não dispararia no horário. 65 min garante o banco já acordado
+// quando o jogo entra na janela de 60 min, então a notificação sai pontual.
+const SYNC_LEAD_MS = 65 * 60 * 1000;
+// 6h depois do kickoff cobre o pior caso do mata-mata (90' + prorrogação +
+// pênaltis ≈ 2h40) somado ao atraso do free tier do provedor para confirmar
+// FINISHED — garantindo pontuação e crédito do bônus de campeão DENTRO da janela
+// do jogo. Correções tardias de placar (horas depois) caem na rede do scope=full
+// diário (rescore é idempotente).
+const SYNC_TAIL_MS = 6 * 60 * 60 * 1000;
+
+/**
+ * Há algum jogo que justifique tocar o banco neste tick? Decidido SÓ a partir
+ * da resposta do provedor (que não usa o banco) — para podermos pular o sync
+ * sem acordar o Neon. Ver a nota de economia de compute em runSync().
+ */
+function hasRelevantMatch(
+  matches: ProviderMatch[],
+  now: number = Date.now()
+): boolean {
+  return matches.some((m) => {
+    if (isLiveStatus(m.status)) return true;
+    const kickoff = new Date(m.kickoffUtc).getTime();
+    return kickoff >= now - SYNC_TAIL_MS && kickoff <= now + SYNC_LEAD_MS;
+  });
+}
+
 export async function runSync(scope: SyncScope): Promise<SyncResult> {
   const startedAt = Date.now();
   let matchesUpdated = 0;
@@ -37,6 +73,29 @@ export async function runSync(scope: SyncScope): Promise<SyncResult> {
     const provider = getProvider();
     const query = scope === "window" ? syncWindow() : undefined;
     const providerMatches = await provider.getMatches(query);
+
+    // Economia de compute do Neon: no plano grátis o banco suspende após ~5 min
+    // sem queries e só gasta CU-h enquanto está acordado. Como o cron roda de 1
+    // em 1 min, tocar o Prisma a cada tick manteria o banco acordado 24/7 mesmo
+    // sem jogo. Então, no sync incremental (window), se NÃO há jogo relevante na
+    // janela, retornamos ANTES de qualquer chamada ao banco (inclusive o
+    // SyncLog) — deixando o Neon dormir. O `scope=full` diário e o `manual` do
+    // admin nunca são pulados: reconciliam qualquer divergência e são a rede de
+    // segurança caso um jogo não seja pontuado dentro da sua janela.
+    if (scope === "window" && !hasRelevantMatch(providerMatches)) {
+      const durationMs = Date.now() - startedAt;
+      console.log(
+        "[sync] janela sem jogos relevantes — pulado sem tocar no banco (Neon mantido suspenso)."
+      );
+      return {
+        ok: true,
+        message: "Sem jogos na janela — sync pulado (banco mantido suspenso).",
+        matchesUpdated: 0,
+        matchesScored: 0,
+        standingsUpdated: 0,
+        durationMs,
+      };
+    }
 
     const teams = await prisma.team.findMany({
       select: { id: true, externalId: true, group: true },
