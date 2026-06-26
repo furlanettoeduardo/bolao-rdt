@@ -11,6 +11,7 @@ import useSWR from "swr";
 import { markNotificationsRead } from "@/lib/actions/notifications";
 import { cn } from "@/lib/cn";
 import { isSafeInternalHref } from "@/lib/security";
+import { useLiveActive } from "../use-live-active";
 
 interface NotifItem {
   id: string;
@@ -43,8 +44,14 @@ function timeAgo(iso: string): string {
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  // Só faz polling de 60s quando há jogo ao vivo/próximo (quando notificações de
+  // fato chegam). Ocioso, mantém apenas o fetch inicial + revalidação ao focar a
+  // aba — o sino continua mostrando o que já existe sem martelar o banco (este
+  // endpoint é por-usuário e não cacheia na CDN, então o polling ocioso era o que
+  // mais segurava o Neon acordado durante navegação comum).
+  const { active } = useLiveActive();
   const { data, mutate } = useSWR<Payload>("/api/notifications", fetcher, {
-    refreshInterval: 60_000,
+    refreshInterval: active ? 60_000 : 0,
     revalidateOnFocus: true,
   });
 
