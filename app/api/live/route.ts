@@ -10,8 +10,13 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const { start, end } = saoPauloTodayUtcRange();
+  // `soon`: jogo a começar em ~1h (alinhado ao lead do sync e ao aviso "Falta
+  // 1h"). O cliente usa isto para voltar ao polling rápido um pouco antes do
+  // kickoff. É um sinal compartilhado (não por usuário), então cacheia na CDN.
+  const now = new Date();
+  const soonEnd = new Date(now.getTime() + 65 * 60 * 1000);
 
-  const [agg, liveCount] = await Promise.all([
+  const [agg, liveCount, soonCount] = await Promise.all([
     prisma.match.aggregate({
       where: {
         OR: [
@@ -23,12 +28,16 @@ export async function GET() {
       _count: true,
     }),
     prisma.match.count({ where: { status: { in: ["IN_PLAY", "PAUSED"] } } }),
+    prisma.match.count({
+      where: { status: "SCHEDULED", kickoff: { gt: now, lte: soonEnd } },
+    }),
   ]);
 
   return NextResponse.json(
     {
       stamp: `${agg._count}-${agg._max.updatedAt?.toISOString() ?? "none"}`,
       liveCount,
+      soon: soonCount > 0,
     },
     {
       // Endpoint público sem sessão: a CDN da Vercel serve a mesma resposta a

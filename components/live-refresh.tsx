@@ -1,37 +1,18 @@
 "use client";
 
-// "Tempo real" no front: SWR consulta /api/live (nosso banco — nunca a API
-// externa) em intervalos de 30–60s e dispara router.refresh() quando algo
-// muda, re-renderizando os Server Components com dados frescos.
+// "Tempo real" no front: consulta /api/live (nosso banco — nunca a API externa)
+// via useLiveActive e dispara router.refresh() quando algo muda, re-renderizando
+// os Server Components com dados frescos. O intervalo se ajusta sozinho: rápido
+// quando há jogo ao vivo/próximo, lento quando ocioso (deixando o Neon dormir).
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef } from "react";
-import useSWR from "swr";
+import { useLiveActive } from "./use-live-active";
 
-interface LivePayload {
-  stamp: string;
-  liveCount: number;
-}
-
-const fetcher = (url: string) =>
-  fetch(url).then((res) => {
-    if (!res.ok) throw new Error("Falha ao consultar jogos ao vivo");
-    return res.json() as Promise<LivePayload>;
-  });
-
-export function LiveRefresh({
-  intervalSeconds = 45,
-}: {
-  intervalSeconds?: number;
-}) {
+export function LiveRefresh() {
   const router = useRouter();
   const lastStamp = useRef<string | null>(null);
-
-  const { data } = useSWR<LivePayload>("/api/live", fetcher, {
-    refreshInterval: intervalSeconds * 1000,
-    revalidateOnFocus: true,
-    dedupingInterval: 10_000,
-  });
+  const { data } = useLiveActive();
 
   useEffect(() => {
     if (!data) return;
