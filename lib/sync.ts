@@ -35,10 +35,17 @@ export interface SyncResult {
 // Janela em que vale a pena rodar o sync incremental de 1 em 1 min: algum jogo
 // ao vivo, prestes a começar (apito inicial sem atraso) ou recém-terminado
 // (ainda a pontuar). Fora disso não há nada a fazer.
-const SYNC_LEAD_MS = 15 * 60 * 1000; // 15 min antes do kickoff
-// 4h depois do kickoff cobre prorrogação/pênaltis + o atraso conhecido do free
-// tier do provedor para confirmar FINISHED (mesma folga do diagnóstico abaixo).
-const SYNC_TAIL_MS = 4 * 60 * 60 * 1000;
+// O lead precisa cobrir a notificação "⏰ Falta 1h": notifyUpcomingMatches busca
+// SCHEDULED com kickoff em (agora, agora+60min]. Se o gate só abrisse a 15 min,
+// esse lembrete não dispararia no horário. 65 min garante o banco já acordado
+// quando o jogo entra na janela de 60 min, então a notificação sai pontual.
+const SYNC_LEAD_MS = 65 * 60 * 1000;
+// 6h depois do kickoff cobre o pior caso do mata-mata (90' + prorrogação +
+// pênaltis ≈ 2h40) somado ao atraso do free tier do provedor para confirmar
+// FINISHED — garantindo pontuação e crédito do bônus de campeão DENTRO da janela
+// do jogo. Correções tardias de placar (horas depois) caem na rede do scope=full
+// diário (rescore é idempotente).
+const SYNC_TAIL_MS = 6 * 60 * 60 * 1000;
 
 /**
  * Há algum jogo que justifique tocar o banco neste tick? Decidido SÓ a partir
